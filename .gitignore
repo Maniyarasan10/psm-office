@@ -1,0 +1,50 @@
+# Environment files (never commit real values)
+.env
+.env.*
+!.env.example
+
+# Secret / credential files
+*.pem
+*.key
+*.p12
+*.keystore
+keystore.properties
+service-account*.json
+google-service-account-key.json
+firebase-admin.json
+*firebase-adminsdk*.json
+*serviceAccount*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontends
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Expo
+.expo/
+expo-env.d.ts
+
+# Runtime data (may contain personal data / uploads / backups)
+backend/uploads/
+backend/backups/
+backend/*.log
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

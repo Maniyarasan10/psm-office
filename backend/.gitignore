@@ -1,0 +1,27 @@
+# Local environment with real secrets (ADMIN_PASSWORD, SMTP_PASSWORD, ...)
+.env
+.env.*
+!.env.example
+
+# Google / Firebase service-account credentials (private keys)
+firebase-admin.json
+google-service-account-key.json
+service-account*.json
+*firebase-adminsdk*.json
+*serviceAccount*.json
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime data
+uploads/
+backups/
+*.log

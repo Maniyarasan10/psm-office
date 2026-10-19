@@ -1,0 +1,148 @@
+.logo-loader {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  z-index: 9999;
+  transition: opacity 0.3s ease;
+}
+
+.logo-loader.reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+}
+
+.logo-loader.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.logo-svg {
+  width: min(200px, 80vw);
+  height: min(200px, 80vw);
+  background: transparent;
+}
+
+.logo-piece {
+  fill: none;
+  stroke-width: 0;
+  opacity: 0;
+}
+
+.logo-piece-1 {
+  fill: url(#bimi-grad-topleft);
+}
+
+.logo-piece-2 {
+  fill: url(#bimi-grad-loop);
+}
+
+.logo-piece-3 {
+  fill: url(#bimi-grad-stem);
+}
+
+.logo-piece.visible {
+  opacity: 1;
+}
+
+@keyframes bottom-assemble {
+  0% {
+    transform: translateY(30px) scale(0.94);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes tlp-assemble {
+  0% {
+    transform: translateY(-30px) scale(0.94);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes right-assemble {
+  0% {
+    transform: translateX(30px) scale(0.94);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes hold-emphasis {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 0.16; }
+  50% { opacity: 0.28; }
+}
+
+@keyframes reset {
+  0% {
+    transform: translateY(0) scale(1) translateX(0);
+  }
+  100% {
+    transform: translateY(30px) scale(0.94) translateX(30px);
+  }
+}
+
+.logo-piece-3 {
+  animation: bottom-assemble 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.logo-piece-1 {
+  animation: tlp-assemble 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards 0.15s;
+}
+
+.logo-piece-2 {
+  animation: right-assemble 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards 0.30s;
+}
+
+.logo-piece-1,
+.logo-piece-2,
+.logo-piece-3 {
+  animation-fill-mode: forwards;
+}
+
+.logo-assembled .logo-piece-1,
+.logo-assembled .logo-piece-2,
+.logo-piece-3 {
+  animation: hold-emphasis 2s ease-in-out infinite;
+}
+
+.logo-assembled .logo-piece-1 {
+  animation-delay: 0s;
+}
+
+.logo-assembled .logo-piece-2 {
+  animation-delay: 0.5s;
+}
+
+.logo-assembled .logo-piece-3 {
+  animation-delay: 1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-piece-1,
+  .logo-piece-2,
+  .logo-piece-3 {
+    animation: none;
+    opacity: 1;
+  }
+  .logo-assembled {
+    animation: none;
+  }
+}

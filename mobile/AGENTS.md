@@ -1,0 +1,25 @@
+# Project Rules
+
+- This is an existing React Native + Expo application.
+- Never rebuild the project from scratch.
+- Never delete working functionality without approval.
+- Never invent API endpoints.
+- Never invent backend behavior.
+- Inspect existing code before modifying it.
+- Preserve existing architecture unless there is a clear reason to change it.
+- Use TypeScript.
+- Avoid `any`.
+- Reuse existing components.
+- Do not create duplicate components.
+- Do not introduce unnecessary dependencies.
+- Do not use Tailwind.
+- Use the existing styling architecture.
+- Keep business logic separate from UI.
+- Keep API calls outside screen components.
+- Handle loading, empty, error and success states.
+- Maintain Android compatibility.
+- Maintain Expo compatibility.
+- Run TypeScript checks after significant changes.
+- Do not modify unrelated files.
+- Prefer small, reviewable changes.
+- Never perform a massive rewrite.

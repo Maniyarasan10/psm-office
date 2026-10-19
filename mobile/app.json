@@ -1,0 +1,89 @@
+{
+  "expo": {
+    "name": "PSM Office",
+    "slug": "psm-office",
+    "version": "1.0.0",
+    "scheme": "com.psm.office",
+    "orientation": "portrait",
+    "icon": "./assets/icon_app.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "dark": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.psm.office",
+      "icon": "./assets/icon_app.png"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon_app_foreground.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.psm.office",
+      "googleServicesFile": "./google-services.json",
+      "icon": "./assets/icon_app.png",
+      "allowBackup": false,
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "versionCode": 1
+    },
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#ffffff",
+      "translucent": true
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow PSM Office to access your camera for attendance verification."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow PSM Office to use your location for geotag attendance."
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf"
+          ]
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#4338ca",
+          "defaultChannel": "psm-office-channel"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "40620a7a-4431-4f25-a378-a527383eabb6"
+      }
+    },
+    "owner": "maniyarasan09"
+  }
+}
