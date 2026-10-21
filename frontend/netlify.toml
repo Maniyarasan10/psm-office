@@ -1,6 +1,10 @@
 [build]
-  command = "npm run build"
+  command = "npm ci && npm run build"
   publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--no-audit --no-fund"
 
 # SPA fallback: all client-side routes (login, dashboard, employees, ...)
 # are served by index.html so React Router handles them.
