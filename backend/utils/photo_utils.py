@@ -1,8 +1,18 @@
+"""Profile and attendance photos.
+
+Photos live in Cloudinary (or, as a fallback, on local disk) - never inside
+MongoDB. A stored photo is referenced by its delivery URL, so the browser
+loads it straight from the CDN instead of pulling base64 out of the database.
+
+Legacy rows that still point at ``/api/photo/<id>`` (photos embedded in
+MongoDB before the move to Cloudinary) keep working and are cleaned up by the
+migration script.
+"""
 import base64
 import os
-from datetime import datetime
 
 from backend.db import get_db
+from backend.utils import storage
 
 _IMAGES = "photos"
 
@@ -24,26 +34,32 @@ def photos_collection():
 
 
 def photo_url(photo_id):
+    """Legacy URL for a photo that still lives inside MongoDB."""
     return f"/api/photo/{photo_id}"
 
 
 def store_photo(raw_bytes, mime="image/jpeg"):
-    """Store raw image bytes as base64 in MongoDB and return the photo id."""
-    coll = photos_collection()
-    if coll is None:
-        return None
+    """Store raw image bytes in the media backend and return its URL."""
+    if not raw_bytes:
+        return ""
     if not mime or not mime.startswith("image/"):
         mime = "image/jpeg"
-    result = coll.insert_one({
-        "mime": mime,
-        "data_base64": base64.b64encode(raw_bytes).decode("ascii"),
-        "created_at": datetime.utcnow(),
-    })
-    return str(result.inserted_id)
+    filename = f"photo{_MIME_EXT.get(mime, '.jpg')}"
+    try:
+        asset = storage.upload(
+            raw_bytes,
+            filename=filename,
+            kind=storage.KIND_PHOTOS,
+            resource_type="image",
+            content_type=mime,
+        )
+    except storage.StorageError:
+        return ""
+    return asset["url"]
 
 
 def get_photo(photo_id):
-    """Return (raw_bytes, mime) for a stored photo, or None if missing."""
+    """Return (raw_bytes, mime) for a legacy MongoDB photo, or None."""
     if not photo_id or not isinstance(photo_id, str):
         return None
     coll = photos_collection()
@@ -51,6 +67,7 @@ def get_photo(photo_id):
         return None
     try:
         from bson import ObjectId
+
         doc = coll.find_one({"_id": ObjectId(photo_id)})
     except Exception:
         return None
@@ -64,7 +81,7 @@ def get_photo(photo_id):
 
 
 def delete_photo(photo_id):
-    """Remove a stored photo from MongoDB."""
+    """Remove a legacy MongoDB photo."""
     if not photo_id or not isinstance(photo_id, str):
         return
     coll = photos_collection()
@@ -72,6 +89,7 @@ def delete_photo(photo_id):
         return
     try:
         from bson import ObjectId
+
         coll.delete_one({"_id": ObjectId(photo_id)})
     except Exception:
         pass
@@ -88,10 +106,10 @@ def _decode_data_url(photo_path):
 
 
 def normalize_photo_path(photo_path):
-    """Return a Mongo-backed photo URL for any photo_path.
+    """Return a stored photo URL for any photo_path.
 
-    Base64 data URLs (new uploads or legacy rows) are stored in MongoDB as
-    base64 and the row is rewritten to a /api/photo/<id> URL.
+    Base64 data URLs (new uploads or legacy rows) are uploaded to the media
+    backend and the row is rewritten to the returned URL.
     """
     if not photo_path or not isinstance(photo_path, str):
         return photo_path
@@ -104,20 +122,23 @@ def normalize_photo_path(photo_path):
     if decoded is None:
         return ""
     raw_bytes, mime = decoded
-    photo_id = store_photo(raw_bytes, mime)
-    if photo_id:
-        return photo_url(photo_id)
-    return ""
+    return store_photo(raw_bytes, mime)
 
 
 def delete_profile_file(photo_path):
-    """Remove a stored profile photo from MongoDB (or legacy disk)."""
+    """Remove a stored profile photo (Cloudinary, local disk or legacy)."""
     if not photo_path or not isinstance(photo_path, str):
         return
     if photo_path.startswith("data:"):
         return
     if photo_path.startswith("/api/photo/"):
         delete_photo(photo_path.split("/")[-1])
+        return
+    if photo_path.startswith("/uploads/"):
+        storage.delete(photo_path)
+        return
+    if photo_path.startswith("http://") or photo_path.startswith("https://"):
+        storage.delete(photo_path)
         return
     filename = photo_path.rstrip("/").split("/")[-1]
     if not filename:
@@ -148,10 +169,11 @@ def _find_upload_file(photo_path):
     return None
 
 
-def migrate_photos_to_db():
-    """Move any photos still on disk / as data URLs into MongoDB (base64).
+def migrate_photos_to_storage():
+    """Move photos still stored as data URLs into the media backend.
 
-    Idempotent: rows already pointing at /api/photo/<id> are skipped.
+    Idempotent and cheap: rows already pointing at a CDN URL or at
+    ``/api/photo/<id>`` are skipped.
     """
     db = get_db()
     if db is None:
@@ -165,24 +187,21 @@ def migrate_photos_to_db():
                 continue
             if path.startswith("/api/photo/"):
                 continue
+            if not path.startswith("data:"):
+                continue
             raw_bytes = None
             mime = "image/jpeg"
-            if path.startswith("data:"):
-                decoded = _decode_data_url(path)
-                if decoded:
-                    raw_bytes, mime = decoded
-            else:
-                found = _find_upload_file(path)
-                if found:
-                    raw_bytes = found
+            decoded = _decode_data_url(path)
+            if decoded:
+                raw_bytes, mime = decoded
             if not raw_bytes:
                 continue
-            photo_id = store_photo(raw_bytes, mime)
-            if photo_id:
+            url = store_photo(raw_bytes, mime)
+            if url:
                 db[collection].update_one(
                     {"_id": doc["_id"]},
-                    {"$set": {"photo_path": photo_url(photo_id)}},
+                    {"$set": {"photo_path": url}},
                 )
                 migrated += 1
     if migrated:
-        print(f"[photos] migrated {migrated} photo path(s) into MongoDB")
+        print(f"[photos] migrated {migrated} photo path(s) out of MongoDB")

@@ -1,11 +1,10 @@
-import base64
-import io
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, redirect
 from backend.models.document_model import (
     all_documents, add_document, rename_document, delete_document, get_document,
 )
 from backend.utils.activity_log import log_activity
 from backend.utils.auth import admin_required, auth_required, current_auth
+from backend.utils import storage
 from backend.utils.uploads import validate_document_upload
 
 document_bp = Blueprint("documents", __name__)
@@ -14,6 +13,23 @@ CATEGORIES = [
     "Company Logo", "Offer Letter", "NDA", "Letterhead",
     "Employee Documents", "Intern Documents", "Certificates", "Invoices",
 ]
+
+
+def _delete_stored_file(doc):
+    """Remove the stored file of a document from the media backend."""
+    if not doc:
+        return
+    path = doc.get("file_path")
+    if path:
+        parsed = storage.parse_cloudinary_url(path)
+        if parsed:
+            storage.delete_by_public_id(parsed["public_id"], parsed["resource_type"])
+        else:
+            storage.delete(path)
+        return
+    public_id = doc.get("cloudinary_public_id")
+    if public_id:
+        storage.delete_by_public_id(public_id, "raw")
 
 
 @document_bp.route("/api/documents", methods=["GET"])
@@ -43,7 +59,17 @@ def upload_document():
         return jsonify({"error": error}), 400
 
     file_type = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    encoded = base64.b64encode(file_bytes).decode("ascii")
+
+    try:
+        asset = storage.upload(
+            file_bytes,
+            filename=filename,
+            kind=storage.KIND_DOCUMENTS,
+            resource_type="raw",
+            content_type=file.mimetype or None,
+        )
+    except storage.StorageError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     auth = current_auth()
     upload_record = {}
@@ -57,16 +83,22 @@ def upload_document():
     doc_id = add_document({
         "file_name": filename,
         "category": category,
-        "file_path": "",
+        "file_path": asset["url"],
+        "storage": asset["storage"],
+        "cloudinary_public_id": asset.get("public_id", ""),
+        "content_type": file.mimetype or "application/octet-stream",
         "file_type": file_type,
         "linked_person": linked_person,
-        "file_data_base64": encoded,
-        "file_size": len(file_bytes),
+        "file_size": asset.get("bytes") or len(file_bytes),
         **upload_record,
     })
 
     log_activity("File Uploaded", f"{filename} ({category})")
-    return jsonify({"_id": doc_id, "file_name": filename}), 201
+    return jsonify({
+        "_id": doc_id,
+        "file_name": filename,
+        "file_url": asset["url"],
+    }), 201
 
 
 @document_bp.route("/api/documents/<doc_id>/rename", methods=["PUT"])
@@ -85,6 +117,7 @@ def rename_doc(doc_id):
 def delete_doc(doc_id):
     doc = get_document(doc_id)
     if doc:
+        _delete_stored_file(doc)
         delete_document(doc_id)
     log_activity("File Deleted", doc.get("file_name", "") if doc else "")
     return jsonify({"message": "Deleted"})
@@ -94,7 +127,19 @@ def delete_doc(doc_id):
 @auth_required
 def download_doc(doc_id):
     doc = get_document(doc_id)
-    if doc and doc.get("file_data_base64"):
+    if not doc:
+        return jsonify({"error": "File not found"}), 404
+
+    # New documents live in the media backend: hand the client the CDN URL.
+    path = doc.get("file_path")
+    if path:
+        return redirect(storage.download_url(path, doc.get("file_name")), code=302)
+
+    # Legacy documents that still carry the file body inside MongoDB.
+    if doc.get("file_data_base64"):
+        import base64
+        import io
+
         file_bytes = base64.b64decode(doc["file_data_base64"])
         return send_file(
             io.BytesIO(file_bytes),
@@ -102,6 +147,18 @@ def download_doc(doc_id):
             download_name=doc.get("file_name", "download"),
             mimetype=doc.get("content_type") or "application/octet-stream",
         )
+    return jsonify({"error": "File not found"}), 404
+
+
+@document_bp.route("/api/documents/<doc_id>/view", methods=["GET"])
+@auth_required
+def view_doc(doc_id):
+    doc = get_document(doc_id)
+    if not doc:
+        return jsonify({"error": "File not found"}), 404
+    path = doc.get("file_path")
+    if path:
+        return redirect(path, code=302)
     return jsonify({"error": "File not found"}), 404
 
 

@@ -22,13 +22,19 @@ def all_employees(search=None):
             {"phone": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
         ]
-    docs = list(db.employees.find(query).sort("created_at", -1))
+    # The password hash is never sent to a client and only makes the
+    # documents heavier on the wire.
+    docs = list(
+        db.employees.find(query, {"password_hash": 0}).sort("created_at", -1)
+    )
     return [serialize_doc(d) for d in docs]
 
 
 def get_employee(employee_id):
     db = get_db()
-    doc = db.employees.find_one({"_id": _to_oid(employee_id)})
+    doc = db.employees.find_one(
+        {"_id": _to_oid(employee_id)}, {"password_hash": 0}
+    )
     return serialize_doc(doc)
 
 

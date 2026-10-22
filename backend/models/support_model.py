@@ -1,9 +1,9 @@
-import base64
 from datetime import datetime
 from uuid import uuid4
 from bson import ObjectId
 from pymongo import ReturnDocument
 from backend.db import get_db
+from backend.utils import storage
 
 # Ticket lifecycle. Employee-controlled actions are guarded separately in the
 # routes (cancel / reopen / confirm-resolution); this map governs the status
@@ -122,18 +122,34 @@ def set_priority(ticket_id, priority, activity_entry=None):
 
 
 def build_attachment(file_storage):
+    """Upload a support attachment to the media backend.
+
+    The file body never touches MongoDB - only its delivery URL and metadata
+    are stored on the ticket.
+    """
     raw = file_storage.read()
     if not raw:
         return None
     filename = file_storage.filename or "attachment"
     ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    mime = file_storage.mimetype or "application/octet-stream"
+
+    asset = storage.upload(
+        raw,
+        filename=filename,
+        kind=storage.KIND_ATTACHMENTS,
+        resource_type="raw",
+        content_type=mime,
+    )
     return {
         "attachment_id": uuid4().hex,
         "file_name": filename,
         "file_type": ext,
-        "mime": file_storage.mimetype or "application/octet-stream",
-        "file_size": len(raw),
-        "file_data_base64": base64.b64encode(raw).decode("ascii"),
+        "mime": mime,
+        "file_size": asset.get("bytes") or len(raw),
+        "file_url": asset["url"],
+        "storage": asset["storage"],
+        "cloudinary_public_id": asset.get("public_id", ""),
     }
 
 

@@ -21,10 +21,12 @@ def all_documents(search=None, category=None):
         ]
     if category:
         query["category"] = category
-    # The list endpoint only needs metadata; the base64 file body is served by
-    # /api/documents/<id>/download and would otherwise bloat every list call.
+    # The list endpoint only needs metadata; the file body lives in the media
+    # backend and the legacy base64 column would otherwise bloat every call.
     docs = list(
-        db.documents.find(query, {"file_data_base64": 0}).sort("uploaded_at", -1)
+        db.documents.find(
+            query, {"file_data_base64": 0, "cloudinary_public_id": 0}
+        ).sort("uploaded_at", -1)
     )
     return [serialize_doc(d) for d in docs]
 

@@ -3,11 +3,22 @@
 Uploads are untrusted input. These helpers enforce a size cap, an extension
 allowlist and (for images) real content sniffing via magic bytes, so a
 mislabeled or oversized file is rejected before it is stored.
+
+Images are also downscaled and re-encoded here (see :func:`optimize_image`).
+Doing it before the upload keeps the Cloudinary media library - and the
+bandwidth it serves - small without spending any of the account's
+transformation credits.
 """
+import io
 import os
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
+
+# Images wider than this are scaled down before they are stored.
+IMAGE_MAX_WIDTH = 1200
+# Quality used when an image is re-encoded as JPEG.
+IMAGE_JPEG_QUALITY = 82
 
 # (mime, list of magic-byte prefixes / predicates)
 _IMAGE_SIGNATURES = (
@@ -101,3 +112,65 @@ def validate_document_upload(file_storage, max_bytes=MAX_DOCUMENT_BYTES):
         return None, None, error
     safe_name = secure_filename(name) or f"upload.{ext}"
     return raw_bytes, safe_name, None
+
+
+def optimize_image(raw_bytes, mime, max_width=IMAGE_MAX_WIDTH,
+                   quality=IMAGE_JPEG_QUALITY):
+    """Downscale and re-encode an image before it is stored.
+
+    Returns ``(bytes, mime)``. The original bytes are returned untouched
+    when the image needs no shrinking, when Pillow is not installed, or when
+    the source format is not one we re-encode (animated GIFs are left alone).
+
+    Shrinking here - rather than asking Cloudinary for a resized derivative -
+    keeps the media library small and costs no transformation credits.
+    """
+    if not raw_bytes:
+        return raw_bytes, mime
+
+    if mime not in ("image/jpeg", "image/png", "image/webp"):
+        return raw_bytes, mime
+
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        # Pillow is optional - without it the original bytes are stored.
+        return raw_bytes, mime
+
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as image:
+            image = ImageOps.exif_transpose(image)
+            has_alpha = image.mode in ("RGBA", "LA", "PA")
+
+            if image.width <= max_width:
+                return raw_bytes, mime
+
+            height = max(1, round(image.height * max_width / image.width))
+            image = image.resize((max_width, height), Image.LANCZOS)
+
+            buffer = io.BytesIO()
+            if mime == "image/png":
+                image.save(buffer, format="PNG", optimize=True)
+                new_mime = "image/png"
+            elif mime == "image/webp":
+                image.save(buffer, format="WEBP", quality=quality, method=4)
+                new_mime = "image/webp"
+            else:
+                if has_alpha:
+                    # JPEG has no alpha channel - flatten onto white.
+                    background = Image.new("RGB", image.size, (255, 255, 255))
+                    background.paste(image, mask=image.split()[-1])
+                    image = background
+                elif image.mode != "RGB":
+                    image = image.convert("RGB")
+                image.save(buffer, format="JPEG", quality=quality, optimize=True)
+                new_mime = "image/jpeg"
+
+            optimized = buffer.getvalue()
+    except Exception:
+        # A malformed or exotic image is stored as-is rather than rejected.
+        return raw_bytes, mime
+
+    if not optimized or len(optimized) >= len(raw_bytes):
+        return raw_bytes, mime
+    return optimized, new_mime

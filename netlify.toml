@@ -1,0 +1,46 @@
+# Root Netlify config.
+#
+# The Vite app lives in ./frontend, but Netlify publishes the repository root by
+# default (no index.html there => "Page not found" on every route). This file
+# makes the root a valid build context: it builds ./frontend and publishes
+# ./frontend/dist as the site root.
+#
+# If the Netlify site's "base directory" is set to "frontend" in the UI, Netlify
+# ignores this file and uses ./frontend/netlify.toml instead (same result).
+
+[build]
+  command = "cd frontend && npm ci && npm run build"
+  publish = "frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--no-audit --no-fund"
+
+# SPA fallback: every client-side route (login, dashboard, employees, ...)
+# is served by index.html so React Router can handle it.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cache hashed build assets forever.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Static images (ce.png / fin.png / logo.png).
+[[headers]]
+  for = "/ce.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/fin.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/logo.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"

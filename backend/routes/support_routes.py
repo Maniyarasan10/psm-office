@@ -1,7 +1,7 @@
 import base64
 import io
 from datetime import datetime
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, redirect
 from backend.db import serialize_doc
 from backend.models.support_model import (
     STATUS_ORDER,
@@ -23,6 +23,7 @@ from backend.models.support_model import (
 from backend.utils.activity_log import log_activity
 from backend.utils.notify import notify_person
 from backend.utils.auth import admin_required, auth_required
+from backend.utils import storage
 
 support_bp = Blueprint("support", __name__)
 
@@ -38,9 +39,16 @@ MAX_ATTACHMENTS = 5
 MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
 
 
+_HIDDEN_ATTACHMENT_FIELDS = ("file_data_base64", "cloudinary_public_id")
+
+
 def _strip_file_data(value):
     if isinstance(value, dict):
-        return {k: _strip_file_data(v) for k, v in value.items() if k != "file_data_base64"}
+        return {
+            k: _strip_file_data(v)
+            for k, v in value.items()
+            if k not in _HIDDEN_ATTACHMENT_FIELDS
+        }
     if isinstance(value, list):
         return [_strip_file_data(item) for item in value]
     return value
@@ -79,7 +87,10 @@ def _parse_attachments(file_list):
             return None, f"Maximum of {MAX_ATTACHMENTS} attachments per message"
         if file_storage.content_length and file_storage.content_length > MAX_ATTACHMENT_BYTES:
             return None, f"Each attachment must be under {MAX_ATTACHMENT_BYTES // (1024 * 1024)}MB"
-        attachment = build_attachment(file_storage)
+        try:
+            attachment = build_attachment(file_storage)
+        except storage.StorageError as exc:
+            return None, f"Could not store attachment: {exc}"
         if attachment and attachment["file_size"] > MAX_ATTACHMENT_BYTES:
             return None, f"Each attachment must be under {MAX_ATTACHMENT_BYTES // (1024 * 1024)}MB"
         if attachment:
@@ -447,13 +458,21 @@ def download_attachment(attachment_id):
                     break
             if match:
                 break
-    if not match or not match.get("file_data_base64"):
+    if not match:
         return jsonify({"error": "Attachment not found"}), 404
 
-    file_bytes = base64.b64decode(match["file_data_base64"])
-    return send_file(
-        io.BytesIO(file_bytes),
-        as_attachment=True,
-        download_name=match.get("file_name", "attachment"),
-        mimetype=match.get("mime") or "application/octet-stream",
-    )
+    # Attachments live in the media backend; hand out the CDN URL.
+    file_url = match.get("file_url")
+    if file_url:
+        return redirect(storage.download_url(file_url, match.get("file_name")), code=302)
+
+    # Legacy attachments that still carry the file body inside MongoDB.
+    if match.get("file_data_base64"):
+        file_bytes = base64.b64decode(match["file_data_base64"])
+        return send_file(
+            io.BytesIO(file_bytes),
+            as_attachment=True,
+            download_name=match.get("file_name", "attachment"),
+            mimetype=match.get("mime") or "application/octet-stream",
+        )
+    return jsonify({"error": "Attachment not found"}), 404

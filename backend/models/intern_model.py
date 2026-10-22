@@ -52,7 +52,7 @@ def all_interns(search=None):
             {"department": {"$regex": search, "$options": "i"}},
             {"mentor_name": {"$regex": search, "$options": "i"}},
         ]
-    docs = list(db.interns.find(query).sort("created_at", -1))
+    docs = list(db.interns.find(query, {"password_hash": 0}).sort("created_at", -1))
     interns = [serialize_doc(d) for d in docs]
     return [_apply_mentor(db, i) for i in interns]
 
@@ -121,9 +121,11 @@ def set_intern_password(intern_id, raw_password):
 
 def get_intern_by_id(intern_id):
     db = get_db()
-    intern = db.interns.find_one({"intern_id": intern_id})
+    intern = db.interns.find_one({"intern_id": intern_id}, {"password_hash": 0})
     if not intern:
-        intern = db.interns.find_one({"_id": _to_oid(intern_id)})
+        intern = db.interns.find_one(
+            {"_id": _to_oid(intern_id)}, {"password_hash": 0}
+        )
     if not intern:
         return None
     _apply_mentor(db, intern)

@@ -1,0 +1,33 @@
+# Caddy reverse proxy for the PSM Office Manager API.
+#
+# Install as:  sudo install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
+# then:        sudo systemctl reload caddy
+#
+# Caddy obtains and renews the TLS certificate automatically (Let's Encrypt,
+# HTTP-01 challenge). That means the api.<domain> A record must point directly
+# at this server's public IP and must NOT be proxied by a CDN - a proxied
+# record breaks the HTTP-01 challenge.
+
+api.problemsolvingmind.com {
+	encode zstd gzip
+
+	# WebSocket upgrades (/api/ws) are handled by Caddy automatically.
+	reverse_proxy 127.0.0.1:8000 {
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/psm-office.log {
+			roll_size 5MiB
+			roll_keep 3
+		}
+		format json
+	}
+}

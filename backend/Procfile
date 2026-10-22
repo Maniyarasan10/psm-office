@@ -1,1 +1,5 @@
-web: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 8 --worker-class gthread --access-logfile - --error-logfile - wsgi:app
+# One worker on purpose: backend/realtime.py keeps the WebSocket registry in
+# memory, so a second worker process would hold a disjoint set of connections
+# and push events would only reach part of the audience. Raise the thread count
+# instead of the worker count.
+web: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --worker-class gthread --timeout 120 --graceful-timeout 30 --access-logfile - --error-logfile - wsgi:app

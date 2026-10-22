@@ -17,6 +17,7 @@ from backend.models.attendance_model import (
 from backend.db import get_db
 from backend.utils.push_utils import send_push
 from backend.models import notification_model
+from backend import config
 from backend.utils.auth import (
     admin_required,
     announcement_sender_required,
@@ -70,6 +71,44 @@ def update_settings_route():
         pass
     log_activity("Settings Updated", str(list(data.keys())))
     return jsonify({"message": "Settings updated"})
+
+
+@settings_bp.route("/api/storage", methods=["GET"])
+@admin_required
+def storage_stats():
+    """Database footprint plus the media backend in use.
+
+    Handy for keeping an eye on the MongoDB Atlas free tier budget: file
+    bodies live in Cloudinary, so only metadata is stored here.
+    """
+    db = get_db()
+    from backend.utils import storage
+
+    collections = []
+    total = 0
+    try:
+        for name in db.list_collection_names():
+            try:
+                stats = db.command("collStats", name)
+            except Exception:
+                continue
+            size = int(stats.get("size", 0))
+            total += size
+            collections.append({
+                "name": name,
+                "size_bytes": size,
+                "count": int(stats.get("count", 0)),
+            })
+        collections.sort(key=lambda item: item["size_bytes"], reverse=True)
+    except Exception:
+        collections = []
+
+    return jsonify({
+        "database": config.db_name(),
+        "total_size_bytes": total,
+        "collections": collections,
+        "media": storage.status(),
+    })
 
 
 @settings_bp.route("/api/notes", methods=["GET"])

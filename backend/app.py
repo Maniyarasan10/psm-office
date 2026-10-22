@@ -6,9 +6,23 @@ import time
 from dotenv import load_dotenv
 from flask import Flask, g, send_from_directory, request, jsonify, Response
 from flask_cors import CORS
-from flask_sock import Sock
 
 load_dotenv()
+
+# True when running under Cloudflare Python Workers (see
+# backend/cloudflare-flask-api/src/worker.py). Some features are unavailable
+# there: WebSockets need simple-websocket/wsproto (not in the Pyodide package
+# set) and a long-lived process cannot host background threads, since an
+# isolate is only alive while it is handling a request.
+_ON_WORKERS = os.getenv("CLOUDFLARE_WORKER", "").strip().lower() in ("1", "true", "yes")
+
+if _ON_WORKERS:
+    # Importing flask_sock at module level would abort the isolate, because its
+    # dependency chain is not available. The realtime bind is registered lazily
+    # and skipped below, so the import is genuinely optional.
+    Sock = None
+else:
+    from flask_sock import Sock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,19 +43,25 @@ from backend.routes.backup_routes import backup_bp
 from backend.routes.support_routes import support_bp
 from backend.routes.notification_routes import notification_bp
 from backend.utils.photo_utils import (
-    normalize_photo_path,
     store_photo,
     get_photo,
-    photo_url,
-    migrate_photos_to_db,
+    migrate_photos_to_storage,
 )
+from backend.utils import storage
 from backend.utils.auth import verify_token, auth_required
 from backend.utils.uploads import validate_image_upload
 
-sock = Sock()
+sock = None if _ON_WORKERS else Sock()
 
 
 def _start_auto_absent_worker(app):
+    if os.getenv("DISABLE_BACKGROUND_WORKERS", "").strip().lower() in ("1", "true", "yes"):
+        app.logger.info(
+            "Auto-absent worker disabled (DISABLE_BACKGROUND_WORKERS); "
+            "run the task on a schedule instead."
+        )
+        return
+
     import threading
     import time
     from datetime import date as date_type
@@ -178,49 +198,68 @@ def create_app():
     app.register_blueprint(notification_bp)
 
     get_db()
-    migrate_photos_to_db()
+    migrate_photos_to_storage()
+
+    if storage.cloudinary_ready():
+        app.logger.info(
+            "Media storage: Cloudinary (cloud %s, folder %s)",
+            config.cloudinary_cloud_name(),
+            config.cloudinary_folder(),
+        )
+    else:
+        app.logger.warning(
+            "Media storage: LOCAL DISK - set CLOUDINARY_CLOUD_NAME / "
+            "CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET to store files in the cloud."
+        )
 
     _start_auto_absent_worker(app)
 
-    sock.init_app(app)
+    if sock is not None:
+        sock.init_app(app)
 
-    @sock.route("/api/ws")
-    def realtime_socket(ws):
-        """Realtime channel: authenticates by token, then keeps the socket open.
+        @sock.route("/api/ws")
+        def realtime_socket(ws):
+            """Realtime channel: authenticates by token, then keeps the socket open.
 
-        The client sends nothing meaningful; the value of the connection is the
-        server pushing small event envelopes (see backend.realtime). Malformed or
-        expired tokens are rejected by closing immediately.
-        """
-        from backend.realtime import broker
+            The client sends nothing meaningful; the value of the connection is the
+            server pushing small event envelopes (see backend.realtime). Malformed or
+            expired tokens are rejected by closing immediately.
+            """
+            from backend.realtime import broker
 
-        payload = verify_token(request.args.get("token", ""), expected_type="access")
-        if not payload:
+            payload = verify_token(request.args.get("token", ""), expected_type="access")
+            if not payload:
+                try:
+                    ws.close()
+                except Exception:
+                    pass
+                return
+
+            person_id = payload.get("sub")
+            broker.register(person_id, ws)
             try:
-                ws.close()
+                ws.send(json.dumps({"type": "connected"}))
+                while True:
+                    data = ws.receive()
+                    if data is None:
+                        break
+                    # Inbound frames are ignored; this loop just detects disconnects.
             except Exception:
                 pass
-            return
-
-        person_id = payload.get("sub")
-        broker.register(person_id, ws)
-        try:
-            ws.send(json.dumps({"type": "connected"}))
-            while True:
-                data = ws.receive()
-                if data is None:
-                    break
-                # Inbound frames are ignored; this loop just detects disconnects.
-        except Exception:
-            pass
-        finally:
-            broker.unregister(person_id, ws)
+            finally:
+                broker.unregister(person_id, ws)
+    else:
+        app.logger.info(
+            "Realtime WebSocket disabled: flask-sock is unavailable in this runtime."
+        )
 
     app.logger.info("PSM Office backend is starting")
 
     uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
     profiles_dir = os.path.join(uploads_dir, "profiles")
-    os.makedirs(profiles_dir, exist_ok=True)
+    if not _ON_WORKERS:
+        # There is no durable, writable local disk in a Worker isolate.
+        os.makedirs(profiles_dir, exist_ok=True)
 
     @app.route("/uploads/attendance/<path:filename>")
     def serve_attendance_photo(filename):
@@ -230,6 +269,11 @@ def create_app():
     @app.route("/uploads/profiles/<path:filename>")
     def serve_profile_photo(filename):
         return send_from_directory(profiles_dir, filename)
+
+    @app.route("/uploads/<path:filename>")
+    def serve_stored_file(filename):
+        """Serve files kept on local disk (the no-Cloudinary fallback)."""
+        return send_from_directory(uploads_dir, filename)
 
     @app.route("/api/photo/<photo_id>")
     def serve_photo(photo_id):
@@ -251,17 +295,21 @@ def create_app():
         raw_bytes, mime, error = validate_image_upload(photo)
         if error:
             return jsonify({"error": error}), 400
-        photo_id = store_photo(raw_bytes, mime)
-        if not photo_id:
+        url = store_photo(raw_bytes, mime)
+        if not url:
             return jsonify({"error": "Storage unavailable"}), 500
-        return jsonify({"photo_path": photo_url(photo_id)})
+        return jsonify({"photo_path": url})
 
     @app.route("/api/health")
     def health():
         """Lightweight liveness/readiness probe (no sensitive details)."""
         database_ok = get_db() is not None
         status = "ok" if database_ok else "degraded"
-        return jsonify({"status": status, "database": database_ok}), (200 if database_ok else 503)
+        return jsonify({
+            "status": status,
+            "database": database_ok,
+            "storage": storage.status(),
+        }), (200 if database_ok else 503)
 
     @app.route("/")
     def index():

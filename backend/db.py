@@ -7,20 +7,56 @@ from backend import config
 
 _client = None
 _db = None
+# Identity of the connection the cached client was built for. The config is
+# resolved lazily, so the target can change at runtime (tests point at a
+# throwaway database); when it does, the client is rebuilt.
+_connection_key = None
+
+
+def _close_client():
+    global _client, _db, _connection_key
+
+    if _client is not None:
+        try:
+            _client.close()
+        except Exception:
+            pass
+    _client = None
+    _db = None
+    _connection_key = None
 
 
 def get_db():
-    global _client, _db
+    global _client, _db, _connection_key
+
+    uri = config.mongo_uri()
+    db_name = config.db_name()
+    key = (uri, db_name)
+
+    if _db is not None and key != _connection_key:
+        # The connection target changed - drop the stale client so the new
+        # database is picked up instead of the cached one.
+        _close_client()
+
     if _db is None:
-        uri = config.mongo_uri()
         try:
-            _client = MongoClient(uri, serverSelectionTimeoutMS=2000)
-            db_name = config.db_name()
+            _client = MongoClient(
+                uri,
+                serverSelectionTimeoutMS=config.mongo_server_selection_timeout_ms(),
+                connectTimeoutMS=10000,
+                socketTimeoutMS=45000,
+                # The free Atlas tier caps concurrent connections, so the pool
+                # stays deliberately small.
+                maxPoolSize=config.mongo_max_pool_size(),
+                minPoolSize=0,
+                retryWrites=True,
+                appname="psm-office",
+            )
             _db = _client.get_database(db_name)
+            _connection_key = key
             _ensure_indexes()
         except (ConfigurationError, ConnectionFailure, OperationFailure, ServerSelectionTimeoutError) as exc:
-            _client = None
-            _db = None
+            _close_client()
             if os.getenv("FLASK_ENV", "").lower() == "production":
                 raise RuntimeError(f"Could not connect to MongoDB at startup: {exc}") from exc
             print(f"MongoDB unavailable, continuing without database: {exc}")
@@ -53,7 +89,44 @@ def _ensure_indexes():
     db.notifications.create_index([("person_type", 1), ("person_id", 1), ("created_at", -1)])
     db.notifications.create_index("dedupe_key")
     db.announcements.create_index("created_at")
+    _ensure_ttl_indexes(db)
     _seed_settings(db)
+
+
+def _ensure_ttl_indexes(db):
+    """Expire ephemeral collections so the database stays small.
+
+    MongoDB removes expired documents itself roughly once a minute, which
+    keeps the free tier's storage budget from creeping upwards.
+    """
+    day = 24 * 60 * 60
+    try:
+        db.notifications.create_index(
+            "created_at",
+            expireAfterSeconds=max(1, config.notification_ttl_days()) * day,
+            name="ttl_notifications",
+        )
+        db.activity_log.create_index(
+            "timestamp",
+            expireAfterSeconds=max(1, config.activity_log_ttl_days()) * day,
+            name="ttl_activity_log",
+        )
+        db.password_resets.create_index(
+            "expires_at",
+            expireAfterSeconds=0,
+            name="ttl_password_resets",
+        )
+        # Photos that still live inside MongoDB (pre-Cloudinary) are dropped
+        # once they are old enough; the migration script removes them sooner.
+        db.photos.create_index(
+            "created_at",
+            expireAfterSeconds=max(1, config.legacy_photo_ttl_days()) * day,
+            name="ttl_photos",
+        )
+    except OperationFailure:
+        # An index with a different definition may already exist; the
+        # remaining TTL indexes are still worth creating.
+        pass
 
 
 def _seed_settings(db):

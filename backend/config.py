@@ -10,6 +10,8 @@ required secret is missing or an unsafe default is still in place.
 """
 import hashlib
 import os
+import re
+from urllib.parse import quote_plus
 
 
 def _split_env(name, default=""):
@@ -44,11 +46,134 @@ def db_name():
     return os.getenv("MONGO_DB_NAME", "psm_office_manager")
 
 
+def _escape_mongo_credentials(uri):
+    """Percent-encode credentials in a MongoDB URI.
+
+    A password containing a reserved character (``@``, ``:``, ``/``, ...) has
+    to be percent-encoded or pymongo rejects the whole URI with
+    ``InvalidURI``. Secrets are usually pasted in raw, so escape the
+    userinfo section here instead of failing at connect time.
+    """
+    scheme, sep, rest = uri.partition("://")
+    if not sep or not rest:
+        return uri
+
+    # The authority ends at the first "/" (or "?"), the rest is path/options.
+    cut = len(rest)
+    for index, char in enumerate(rest):
+        if char in "/?":
+            cut = index
+            break
+    authority, tail = rest[:cut], rest[cut:]
+
+    # The host is after the LAST "@" - an "@" in the password is the whole
+    # point of this function, so rsplit is what we need.
+    if "@" not in authority:
+        return uri
+    userinfo, _, host = authority.rpartition("@")
+
+    if ":" not in userinfo:
+        return uri
+    username, _, password = userinfo.partition(":")
+
+    # Already-encoded values must not be encoded twice.
+    def _encode(value):
+        if "%" in value:
+            parts = re.split(r"(%[0-9A-Fa-f]{2})", value)
+            return "".join(
+                part if part.startswith("%") else quote_plus(part) for part in parts
+            )
+        return quote_plus(value)
+
+    encoded = "{}:{}@{}".format(_encode(username), _encode(password), host)
+    return "{}://{}{}".format(scheme, encoded, tail)
+
+
 def mongo_uri():
     uri = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017/")
     if not uri or "cluster0.xxxxx.mongodb.net" in uri or uri.startswith("mongodb+srv://<"):
         return "mongodb://127.0.0.1:27017/"
-    return uri
+    return _escape_mongo_credentials(uri)
+
+
+def mongo_max_pool_size():
+    """Maximum MongoDB connections kept open per process.
+
+    The free (M0) Atlas tier caps concurrent connections per cluster, so the
+    pool is kept small on purpose; the app is a single-process API.
+    """
+    return _int_env("MONGO_MAX_POOL_SIZE", 10)
+
+
+def mongo_server_selection_timeout_ms():
+    """How long to wait for a usable server before giving up."""
+    return _int_env("MONGO_SERVER_SELECTION_TIMEOUT_MS", 5000)
+
+
+def notification_ttl_days():
+    """How long per-person notifications are kept before MongoDB expires them."""
+    return _int_env("NOTIFICATION_TTL_DAYS", 90)
+
+
+def activity_log_ttl_days():
+    """How long the activity feed is kept before MongoDB expires it."""
+    return _int_env("ACTIVITY_LOG_TTL_DAYS", 180)
+
+
+def legacy_photo_ttl_days():
+    """Retention for photos that still live inside MongoDB (pre-Cloudinary)."""
+    return _int_env("LEGACY_PHOTO_TTL_DAYS", 30)
+
+
+def cloudinary_cloud_name():
+    return (os.getenv("CLOUDINARY_CLOUD_NAME") or "").strip()
+
+
+def cloudinary_api_key():
+    return (os.getenv("CLOUDINARY_API_KEY") or "").strip()
+
+
+def cloudinary_api_secret():
+    return (os.getenv("CLOUDINARY_API_SECRET") or "").strip()
+
+
+def cloudinary_folder():
+    """Root folder every uploaded asset is filed under."""
+    return (os.getenv("CLOUDINARY_FOLDER") or "psm").strip().strip("/")
+
+
+def cloudinary_secure():
+    """Whether delivery URLs use https (always true in production)."""
+    return _bool_env("CLOUDINARY_SECURE", True)
+
+
+def cloudinary_enabled():
+    """True when Cloudinary is fully configured and can be used for uploads."""
+    return bool(
+        cloudinary_cloud_name()
+        and cloudinary_api_key()
+        and cloudinary_api_secret()
+    )
+
+
+def cloudinary_max_bytes():
+    """Largest file Cloudinary will accept for an unsigned upload."""
+    return _int_env("CLOUDINARY_MAX_BYTES", 25 * 1024 * 1024)
+
+
+def cloudinary_image_max_width():
+    """Width (px) images are scaled down to before they are uploaded."""
+    return _int_env("CLOUDINARY_IMAGE_MAX_WIDTH", 1200)
+
+
+def cloudinary_eager_images():
+    """Whether Cloudinary should also produce a resized derivative.
+
+    Off by default: every transformation spends a credit, and the free plan
+    only grants a handful per month. Images are resized locally before the
+    upload instead, which costs nothing.
+    """
+    return _bool_env("CLOUDINARY_EAGER_IMAGES", False)
 
 
 def cors_origins():
@@ -210,6 +335,11 @@ def _weak_secret(value):
     )
 
 
+def require_cloudinary():
+    """When true, production refuses to start without Cloudinary credentials."""
+    return _bool_env("REQUIRE_CLOUDINARY", False)
+
+
 def validate_config():
     """Return a list of production-blocking configuration problems.
 
@@ -249,6 +379,12 @@ def validate_config():
 
     if db_name() == "psm_test_integration":
         problems.append("Refusing to run production against the integration test database.")
+
+    if require_cloudinary() and not cloudinary_enabled():
+        problems.append(
+            "CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET "
+            "must be set in production so uploads are stored outside MongoDB."
+        )
 
     return problems
 

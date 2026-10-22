@@ -17,6 +17,8 @@ COLLECTIONS = [
     "employees", "interns", "attendance", "tasks",
     "documents", "finance", "settings", "activity_log", "notes", "photos"
 ]
+# "photos" is legacy: photos live in Cloudinary now, so the collection is
+# normally empty. It stays in the list so an older backup still restores.
 
 
 def dump_db():
@@ -41,6 +43,12 @@ def restore_db(data):
 
 
 def make_backup_zip():
+    """Bundle the database metadata (and any local files) into a zip.
+
+    Uploaded images, documents and attachments live in Cloudinary, so the
+    archive only carries the records that point at them - restoring keeps
+    working because the Cloudinary URLs are stored in the documents.
+    """
     data = dump_db()
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:

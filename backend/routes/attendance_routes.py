@@ -8,7 +8,7 @@ from backend.models.attendance_model import (
 from backend.models.employee_model import all_employees
 from backend.models.intern_model import all_interns
 from backend.utils.activity_log import log_activity
-from backend.utils.photo_utils import store_photo, photo_url
+from backend.utils.photo_utils import store_photo
 from backend.utils.uploads import validate_image_upload
 from backend.utils.auth import admin_required, auth_required, current_auth
 from backend.realtime import notify_event
@@ -139,9 +139,9 @@ def confirm_attendance():
             raw_bytes, mime, error = validate_image_upload(photo_file)
             if error:
                 return jsonify({"error": error}), 400
-            photo_id = store_photo(raw_bytes, mime)
-            if photo_id:
-                photo_path = photo_url(photo_id)
+            photo_path = store_photo(raw_bytes, mime)
+            if not photo_path:
+                return jsonify({"error": "Storage unavailable"}), 500
 
     try:
         lat = float(latitude) if latitude else None
