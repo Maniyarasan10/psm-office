@@ -16,6 +16,22 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--no-audit --no-fund"
 
+# Same-origin API: the panel calls /api/* (VITE_API_URL=/api) and Netlify
+# forwards those calls to the API host. These rules MUST come before the SPA
+# fallback: Netlify uses the first matching redirect, so "/*" would otherwise
+# swallow /api/* and return index.html (which makes login fail).
+[[redirects]]
+  from = "/api/*"
+  to = "https://psm-office-api-84c884d6ab34.herokuapp.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/uploads/*"
+  to = "https://psm-office-api-84c884d6ab34.herokuapp.com/uploads/:splat"
+  status = 200
+  force = true
+
 # SPA fallback: every client-side route (login, dashboard, employees, ...)
 # is served by index.html so React Router can handle it.
 [[redirects]]
