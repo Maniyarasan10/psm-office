@@ -3,13 +3,14 @@ import {
   getEmployees, getNextEmployeeId, createEmployee, updateEmployee, deleteEmployee,
   uploadProfilePhoto, profilePhotoUrl, sendPasswordResetOtp,
 } from '../services/services';
-import { DEPARTMENTS, designationsFor, allDesignations } from '../constants/options';
+import { DEPARTMENTS, WORK_MODES, designationsFor, allDesignations } from '../constants/options';
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineCamera } from 'react-icons/hi';
 
 const defaultForm = {
   employee_id: '', name: '', phone: '', email: '',
   department: '', designation: '', joining_date: '',
   dob: '', status: 'Active', notes: '', photo_path: '', password: '',
+  work_mode: '', current_project: '', github: '',
 };
 
 export default function Employees() {
@@ -40,7 +41,13 @@ export default function Employees() {
   const loadEmployees = async () => {
     try {
       const res = await getEmployees(search || undefined);
-      setEmployees(res.data);
+      const sorted = [...(res.data || [])].sort((a, b) =>
+        String(a.employee_id || '').localeCompare(String(b.employee_id || ''), undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        })
+      );
+      setEmployees(sorted);
     } catch (err) {
       console.error(err);
     }
@@ -182,6 +189,12 @@ export default function Employees() {
     return <span className={`badge badge-${cls}`}>{status}</span>;
   };
 
+  const modeBadge = (mode) => {
+    if (!mode) return <span className="text-muted">-</span>;
+    const cls = mode === 'Remote' ? 'remote' : mode === 'Hybrid' ? 'hybrid' : 'onsite';
+    return <span className={`badge badge-${cls}`}>{mode}</span>;
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -219,6 +232,9 @@ export default function Employees() {
                 <th>Designation</th>
                 <th>Phone</th>
                 <th>Email</th>
+                <th>Mode</th>
+                <th>Current Project</th>
+                <th>GitHub</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -226,7 +242,7 @@ export default function Employees() {
             <tbody>
               {employees.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="empty-state">No employees found.</td>
+                  <td colSpan="11" className="empty-state">No employees found.</td>
                 </tr>
               ) : (
                 employees.map((emp) => (
@@ -246,6 +262,15 @@ export default function Employees() {
                     <td>{emp.designation}</td>
                     <td>{emp.phone}</td>
                     <td>{emp.email}</td>
+                    <td>{modeBadge(emp.work_mode)}</td>
+                    <td>{emp.current_project || <span className="text-muted">-</span>}</td>
+                    <td>
+                      {emp.github ? (
+                        <a href={emp.github} target="_blank" rel="noreferrer" className="table-link">GitHub</a>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
                     <td>{statusBadge(emp.status)}</td>
                     <td>
                       <div className="table-actions">
@@ -359,6 +384,31 @@ export default function Employees() {
                     <option value="Inactive">Inactive</option>
                     <option value="On Leave">On Leave</option>
                   </select>
+                </div>
+                <div className="form-group">
+                  <label>Mode</label>
+                  <select value={form.work_mode} onChange={(e) => setForm({ ...form, work_mode: e.target.value })}>
+                    <option value="">Select Mode</option>
+                    {WORK_MODES.map((mode) => (
+                      <option key={mode} value={mode}>{mode}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Current Project</label>
+                  <input
+                    value={form.current_project}
+                    onChange={(e) => setForm({ ...form, current_project: e.target.value })}
+                    placeholder="e.g. school management system"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>GitHub Link</label>
+                  <input
+                    value={form.github}
+                    onChange={(e) => setForm({ ...form, github: e.target.value })}
+                    placeholder="https://github.com/username"
+                  />
                 </div>
                 <div className="form-group full-width">
                   <label>Notes</label>

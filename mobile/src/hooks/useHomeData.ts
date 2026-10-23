@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AttendanceRecord, Task } from '../types';
 import { getAnnouncements, getMyTasks, getPersonAttendance } from '../services/api';
+import { cacheKey, readCache, writeCache } from '../services/offlineCache';
+
+interface HomeCache {
+  attendance: AttendanceRecord | null;
+  attendanceDate: string;
+  tasks: Task[];
+  announcement: string;
+  announcementTopic: string;
+}
 
 // The home card only needs today's record; 14 days covers the weekend-safety
 // window while staying far smaller than the old full-company roster call.
@@ -10,6 +19,7 @@ export interface HomeData {
   attendance: AttendanceRecord | null;
   tasks: Task[];
   announcement: string;
+  announcementTopic: string;
   loading: boolean;
   refreshing: boolean;
   attendanceError: boolean;
@@ -28,6 +38,7 @@ export function useHomeData(scope: HomeScope | null): HomeData {
   const [attendance, setAttendance] = useState<AttendanceRecord | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [announcement, setAnnouncement] = useState('');
+  const [announcementTopic, setAnnouncementTopic] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [attendanceError, setAttendanceError] = useState(false);
@@ -37,6 +48,40 @@ export function useHomeData(scope: HomeScope | null): HomeData {
   const requestId = useRef(0);
   const scopeRef = useRef<HomeScope | null>(scope);
   scopeRef.current = scope;
+
+  const personId = scope?.personId ?? '';
+  const personType = scope?.personType ?? '';
+  const cache = cacheKey('home', personType, personId);
+  const latestRef = useRef<HomeCache>({
+    attendance: null,
+    attendanceDate: '',
+    tasks: [],
+    announcement: '',
+    announcementTopic: '',
+  });
+
+  useEffect(() => {
+    if (!personId) return;
+    let active = true;
+    void readCache<HomeCache>(cache).then(cached => {
+      if (!active || !cached) return;
+      const todayIso = new Date().toISOString().split('T')[0];
+      const sameDay = cached.data.attendanceDate === todayIso;
+      const cachedData: HomeCache = {
+        ...cached.data,
+        attendance: sameDay ? cached.data.attendance : null,
+      };
+      latestRef.current = cachedData;
+      setAttendance(cachedData.attendance);
+      setTasks(cachedData.tasks);
+      setAnnouncement(cachedData.announcement);
+      setAnnouncementTopic(cachedData.announcementTopic);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [cache, personId]);
 
   const run = useCallback(async (mode: 'initial' | 'refresh') => {
     const currentScope = scopeRef.current;
@@ -55,28 +100,38 @@ export function useHomeData(scope: HomeScope | null): HomeData {
 
     if (id !== requestId.current) return;
 
+    const next = { ...latestRef.current };
+
     if (attendanceResult.status === 'fulfilled') {
       const records = attendanceResult.value.data;
-      const todayRecord = records.find(r => r.date === todayIso) ?? null;
-      setAttendance(todayRecord);
+      next.attendance = records.find(r => r.date === todayIso) ?? null;
+      next.attendanceDate = todayIso;
+      setAttendance(next.attendance);
       setAttendanceError(false);
     } else {
       setAttendanceError(true);
     }
 
     if (tasksResult.status === 'fulfilled') {
-      setTasks(tasksResult.value.data);
+      next.tasks = tasksResult.value.data;
+      setTasks(next.tasks);
       setTasksError(false);
     } else {
       setTasksError(true);
     }
 
     if (announcementsResult.status === 'fulfilled') {
-      setAnnouncement(announcementsResult.value.data?.announcement ?? '');
+      next.announcement = announcementsResult.value.data?.announcement ?? '';
+      next.announcementTopic = announcementsResult.value.data?.topic ?? '';
+      setAnnouncement(next.announcement);
+      setAnnouncementTopic(next.announcementTopic);
       setAnnouncementsError(false);
     } else {
       setAnnouncementsError(true);
     }
+
+    latestRef.current = next;
+    writeCache(cacheKey('home', currentScope.personType, currentScope.personId), next);
 
     setLoading(false);
     setRefreshing(false);
@@ -102,6 +157,7 @@ export function useHomeData(scope: HomeScope | null): HomeData {
     attendance,
     tasks,
     announcement,
+    announcementTopic,
     loading,
     refreshing,
     attendanceError,

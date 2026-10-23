@@ -21,6 +21,7 @@ export default function AnnouncementsScreen() {
     useAnnouncement();
   const goBack = useBackButton();
   const [composeVisible, setComposeVisible] = useState(false);
+  const [topic, setTopic] = useState('');
   const [content, setContent] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const now = Date.now();
@@ -36,6 +37,7 @@ export default function AnnouncementsScreen() {
   }, [reload]);
 
   const openCompose = useCallback(() => {
+    setTopic('');
     setContent('');
     setSubmitError(null);
     setComposeVisible(true);
@@ -47,14 +49,14 @@ export default function AnnouncementsScreen() {
   }, []);
 
   const submit = useCallback(async () => {
-    const res = await publish(content);
+    const res = await publish(topic, content);
     if (res.ok) {
       setSubmitError(null);
       setComposeVisible(false);
     } else {
       setSubmitError(res.message ?? 'Failed to publish.');
     }
-  }, [content, publish]);
+  }, [content, publish, topic]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -98,7 +100,9 @@ export default function AnnouncementsScreen() {
                     <MaterialCommunityIcons name="bullhorn" size={22} color={colors.primary} />
                   </View>
                   <View style={styles.headerText}>
-                    <Text style={styles.announcementTitle}>Company announcement</Text>
+                    <Text style={styles.announcementTitle}>
+                      {item.topic?.trim() || 'Announcement'}
+                    </Text>
                     <Text style={styles.announcementCaption}>
                       {item.author_name ? `By ${item.author_name}` : 'Official notice from the office'}
                     </Text>
@@ -137,6 +141,14 @@ export default function AnnouncementsScreen() {
             Publishing sends this message to all employees right away.
           </Text>
           <Input
+            label="Topic"
+            value={topic}
+            onChangeText={setTopic}
+            placeholder="Announcement topic"
+            maxLength={120}
+            containerStyle={styles.composeField}
+          />
+          <Input
             label="Message"
             value={content}
             onChangeText={setContent}
@@ -163,7 +175,7 @@ export default function AnnouncementsScreen() {
               style={styles.modalButton}
               onPress={submit}
               loading={sending}
-              disabled={!content.trim()}
+              disabled={!topic.trim() || !content.trim()}
             >
               Publish
             </Button>

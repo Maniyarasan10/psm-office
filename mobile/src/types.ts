@@ -308,6 +308,7 @@ export interface BirthdayEntry {
 /** One published company announcement from the server history. */
 export interface Announcement {
   _id: string;
+  topic?: string | null;
   content: string;
   created_at: string;
   author_id?: string | null;

@@ -52,7 +52,7 @@ def all_interns(search=None):
             {"department": {"$regex": search, "$options": "i"}},
             {"mentor_name": {"$regex": search, "$options": "i"}},
         ]
-    docs = list(db.interns.find(query, {"password_hash": 0}).sort("created_at", -1))
+    docs = list(db.interns.find(query, {"password_hash": 0}).sort("intern_id", 1))
     interns = [serialize_doc(d) for d in docs]
     return [_apply_mentor(db, i) for i in interns]
 

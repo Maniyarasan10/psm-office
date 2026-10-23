@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSettings } from '../services/api';
+import { readCache, writeCache } from '../services/offlineCache';
+
+const STORY_CACHE_KEY = 'company-story';
+
+interface StoryCache {
+  mission: string;
+  vision: string;
+}
 
 export interface CompanyStory {
   mission: string;
@@ -21,8 +29,11 @@ export function useCompanyStory(): CompanyStory {
       const res = await getSettings();
       if (!activeRef.current) return;
       const data = res.data || {};
-      setMission(typeof data.mission === 'string' ? data.mission.trim() : '');
-      setVision(typeof data.vision === 'string' ? data.vision.trim() : '');
+      const nextMission = typeof data.mission === 'string' ? data.mission.trim() : '';
+      const nextVision = typeof data.vision === 'string' ? data.vision.trim() : '';
+      setMission(nextMission);
+      setVision(nextVision);
+      writeCache<StoryCache>(STORY_CACHE_KEY, { mission: nextMission, vision: nextVision });
     } catch {
       // Silent: callers simply omit the story when it can't be loaded.
     } finally {
@@ -32,6 +43,12 @@ export function useCompanyStory(): CompanyStory {
 
   useEffect(() => {
     activeRef.current = true;
+    void readCache<StoryCache>(STORY_CACHE_KEY).then(cached => {
+      if (!activeRef.current || !cached) return;
+      setMission(typeof cached.data.mission === 'string' ? cached.data.mission : '');
+      setVision(typeof cached.data.vision === 'string' ? cached.data.vision : '');
+      setLoading(false);
+    });
     void load();
     return () => {
       activeRef.current = false;

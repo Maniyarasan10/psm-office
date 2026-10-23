@@ -107,7 +107,20 @@ def mongo_max_pool_size():
 
 def mongo_server_selection_timeout_ms():
     """How long to wait for a usable server before giving up."""
-    return _int_env("MONGO_SERVER_SELECTION_TIMEOUT_MS", 5000)
+    return _int_env("MONGO_SERVER_SELECTION_TIMEOUT_MS", 15000)
+
+
+def mongo_dns_servers():
+    """DNS resolvers used for the ``mongodb+srv://`` lookup, in order.
+
+    An ``srv`` URI needs SRV + TXT lookups before pymongo can even open a
+    socket. Some hotspots and small routers answer those only slowly (or drop
+    them), which makes the lookup miss its lifetime and aborts the connection.
+    Listing a fast public resolver first (``1.1.1.1,8.8.8.8``) avoids that; the
+    system resolvers are kept as a fallback in ``backend/db.py``.
+    """
+    raw = os.getenv("MONGO_DNS_SERVERS", "")
+    return [part.strip() for part in raw.split(",") if part.strip()]
 
 
 def notification_ttl_days():
@@ -195,10 +208,20 @@ def public_base_url():
 
 
 def force_https():
-    """When true, responses are marked as HTTPS-only (HSTS + secure cookies)."""
+    """When true, redirect HTTP to HTTPS and mark responses HTTPS-only."""
     if _bool_env("FORCE_HTTPS", False):
         return True
     return (public_base_url() or "").lower().startswith("https://")
+
+
+def trust_proxy():
+    """Whether to trust X-Forwarded-* headers from the platform proxy.
+
+    Heroku/Cloudflare terminate TLS and forward the original scheme in
+    ``X-Forwarded-Proto``; without this Flask believes every request is plain
+    HTTP (breaking redirects, cookies and client-IP rate limiting).
+    """
+    return _bool_env("TRUST_PROXY", False)
 
 
 def security_headers_enabled():
@@ -292,7 +315,24 @@ def otp_ttl_seconds():
 
 
 def token_ttl():
-    return _int_env("AUTH_TOKEN_TTL", 60 * 60 * 24 * 7)
+    """Access-token lifetime; short by default so a stolen token expires fast."""
+    return _int_env("AUTH_TOKEN_TTL", 60 * 60 * 12)
+
+
+def auth_cookie_name():
+    """HttpOnly cookie used by the web admin panel."""
+    return (os.getenv("AUTH_COOKIE_NAME", "psm_access") or "psm_access").strip()
+
+
+def auth_cookie_samesite():
+    """Cookie SameSite policy (Lax blocks cross-site CSRF form posts)."""
+    value = (os.getenv("AUTH_COOKIE_SAMESITE", "Lax") or "Lax").strip().lower()
+    return value.capitalize() if value in {"lax", "strict", "none"} else "Lax"
+
+
+def auth_cookie_secure():
+    """Send the cookie over HTTPS only (always on in production)."""
+    return _bool_env("AUTH_COOKIE_SECURE", force_https())
 
 
 def refresh_token_ttl():

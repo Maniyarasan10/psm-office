@@ -5,6 +5,7 @@
         <domain includeSubdomains="true">10.0.3.2</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">192.168.*.*</domain>
+        <domain includeSubdomains="false">10.41.98.206</domain>
         <domain includeSubdomains="true">ngrok-free.app</domain>
     </domain-config>
     <base-config cleartextTrafficPermitted="false">

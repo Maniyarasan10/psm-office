@@ -8,7 +8,8 @@ from backend.models.task_model import (
 )
 from backend.utils.activity_log import log_activity
 from backend.utils.notify import notify_person
-from backend.utils.auth import admin_required, auth_required
+from backend.utils.auth import admin_required, auth_required, current_auth
+from backend.utils.authz import can_access_person, can_access_task, is_admin
 
 task_bp = Blueprint("tasks", __name__)
 
@@ -93,13 +94,27 @@ def create_task():
 @task_bp.route("/api/tasks/<task_id>", methods=["PUT"])
 @auth_required
 def update_task_route(task_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    task = get_task(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+
+    auth = current_auth()
+    if auth and not is_admin(auth):
+        if not can_access_task(auth, task):
+            return jsonify({"error": "Forbidden"}), 403
+        # Assignees may only move their own task between statuses; every other
+        # field is controlled by an administrator.
+        allowed = {"status"}
+        data = {key: value for key, value in data.items() if key in allowed}
+
     if data.get("assigned_to"):
         try:
             data["assigned_to"] = ObjectId(data["assigned_to"])
         except Exception:
             pass
     update_task(task_id, data)
+    log_activity("Task Updated", (get_task(task_id) or {}).get("title", ""))
     # The employee "Mark complete" action only sends {status}; the admin edit
     # form always includes assigned_to, so pushing here targets admin edits
     # (deadline, priority, reassignment) without echoing status changes back.
@@ -119,7 +134,9 @@ def update_task_route(task_id):
 @task_bp.route("/api/tasks/<task_id>", methods=["DELETE"])
 @admin_required
 def delete_task_route(task_id):
+    task = get_task(task_id)
     delete_task(task_id)
+    log_activity("Task Deleted", (task or {}).get("title", ""))
     return jsonify({"message": "Deleted"})
 
 
@@ -133,6 +150,9 @@ def counts():
 @task_bp.route("/api/tasks/person/<person_id>", methods=["GET"])
 @auth_required
 def person_tasks(person_id):
+    auth = current_auth()
+    if auth and not can_access_person(auth, person_id):
+        return jsonify({"error": "Forbidden"}), 403
     person_type = request.args.get("type", "employee")
     tasks = tasks_for_person(person_id, person_type)
     return jsonify(tasks)
@@ -145,6 +165,20 @@ def add_task_comment_route(task_id):
     body = (data.get("body") or "").strip()
     author = (data.get("author") or "").strip()
     author_type = (data.get("author_type") or "employee").strip()
+
+    task = get_task(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+
+    auth = current_auth()
+    if auth:
+        if not can_access_task(auth, task):
+            return jsonify({"error": "Forbidden"}), 403
+        if not is_admin(auth):
+            # Never trust a client-supplied identity: the signed token decides
+            # who the comment is from.
+            author = auth.get("name") or auth.get("sub") or author
+            author_type = auth.get("person_type") or "employee"
 
     if not body:
         return jsonify({"error": "Message body is required"}), 400

@@ -5,8 +5,10 @@ from backend.models.employee_model import (
     delete_employee, count_employees, count_active_employees, upcoming_birthdays,
 )
 from backend.models.auth_model import set_password
+from backend.utils.activity_log import log_activity
 from backend.utils.photo_utils import delete_profile_file, normalize_photo_path
-from backend.utils.auth import admin_required, auth_required
+from backend.utils.auth import admin_required, auth_required, current_auth
+from backend.utils.authz import can_access_person, is_admin
 from backend.utils.ids import next_employee_id, peek_employee_id
 from backend.utils.passwords import generate_temp_password
 from backend.utils.mailer import send_credentials_email
@@ -53,6 +55,10 @@ def create_employee():
 
     employee_id = add_employee(data)
     set_password(employee_id_value, password)
+    log_activity(
+        "Employee Created",
+        f"{data.get('name') or employee_id_value} ({employee_id_value})",
+    )
 
     email = (data.get("email") or "").strip()
     email_sent, email_reason = False, ""
@@ -75,15 +81,30 @@ def create_employee():
 @employee_bp.route("/api/employees/<employee_id>", methods=["PUT"])
 @auth_required
 def update_emp(employee_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    existing = get_employee(employee_id)
+    auth = current_auth()
+    if auth and not is_admin(auth):
+        if not existing or not can_access_person(
+            auth, existing.get("_id"), existing.get("employee_id"), employee_id
+        ):
+            return jsonify({"error": "Forbidden"}), 403
+        # Self-service profile edits may only touch contact fields. Roles,
+        # status, department, salary and passwords stay admin-only.
+        allowed = {"name", "phone", "email", "photo_path"}
+        data = {key: value for key, value in data.items() if key in allowed}
+
     data.pop("_id", None)
     data.pop("password", None)
     data.pop("password_hash", None)
-    existing = get_employee(employee_id)
     new_photo = normalize_photo_path(data.get("photo_path"))
     if new_photo is not None:
         data["photo_path"] = new_photo
     update_employee(employee_id, data)
+    log_activity(
+        "Employee Updated",
+        f"{(existing or {}).get('name') or data.get('name') or employee_id}",
+    )
     if existing:
         old_photo = existing.get("photo_path")
         if old_photo and old_photo != data.get("photo_path"):
@@ -96,6 +117,10 @@ def update_emp(employee_id):
 def delete_emp(employee_id):
     existing = get_employee(employee_id)
     delete_employee(employee_id)
+    log_activity(
+        "Employee Deleted",
+        f"{(existing or {}).get('name') or employee_id}",
+    )
     if existing:
         delete_profile_file(existing.get("photo_path"))
     return jsonify({"message": "Deleted"})

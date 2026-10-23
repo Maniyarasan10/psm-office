@@ -23,10 +23,9 @@ class _RateLimiter:
         self._last_prune = time.time()
 
     def _client_key(self):
-        if os.getenv("TRUST_PROXY", "0") == "1":
-            forwarded = request.headers.get("X-Forwarded-For", "")
-            if forwarded:
-                return forwarded.split(",")[0].strip()
+        # ProxyFix (enabled by TRUST_PROXY) already resolves the trusted hop
+        # into request.remote_addr. Parsing X-Forwarded-For here as well would
+        # let a client spoof the first entry and bypass the limiter.
         return request.remote_addr or "unknown"
 
     def _prune(self, now):

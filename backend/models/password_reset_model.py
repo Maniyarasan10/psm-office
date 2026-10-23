@@ -28,6 +28,7 @@ def find_person(identifier):
     employee = db.employees.find_one({"employee_id": identifier})
     if employee:
         return {
+            "_id": str(employee.get("_id", "")),
             "person_type": "employee",
             "identifier": employee.get("employee_id", identifier),
             "name": employee.get("name", ""),
@@ -37,6 +38,7 @@ def find_person(identifier):
     intern = db.interns.find_one({"intern_id": identifier})
     if intern:
         return {
+            "_id": str(intern.get("_id", "")),
             "person_type": "intern",
             "identifier": intern.get("intern_id", identifier),
             "name": intern.get("name", ""),

@@ -338,9 +338,9 @@ export default function AttendanceScreen() {
                 size="md"
                 onPress={() => navigation.navigate('Camera')}
                 style={styles.gpsButton}
-                accessibilityLabel="Check in with GPS location"
+                accessibilityLabel="Check in with location"
               >
-                Check in with GPS
+                Check in with location
               </Button>
             )}
           </>

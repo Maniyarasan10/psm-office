@@ -333,10 +333,18 @@ def download_url(url, filename=None):
     return f"{url}{separator}fl_attachment={suffix}"
 
 
-def status():
-    """Small summary used by the health endpoint."""
-    return {
+def status(detailed=False):
+    """Small summary used by health and admin storage endpoints.
+
+    Health is unauthenticated, so it must not disclose the Cloudinary account
+    name or folder layout. The admin storage page requests ``detailed=True``.
+    """
+    result = {
         "backend": _STORAGE_CLOUDINARY if cloudinary_ready() else _STORAGE_LOCAL,
-        "cloudinary": config.cloudinary_cloud_name() if cloudinary_ready() else "",
-        "folder": config.cloudinary_folder(),
     }
+    if detailed:
+        result["cloudinary"] = (
+            config.cloudinary_cloud_name() if cloudinary_ready() else ""
+        )
+        result["folder"] = config.cloudinary_folder()
+    return result

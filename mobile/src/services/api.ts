@@ -233,7 +233,7 @@ export const createProjectTask = (
 export const getUpcomingBirthdays = (days: number = 30): Promise<AxiosResponse<BirthdayEntry[]>> =>
   api.get('/employees/birthdays', { params: { days } });
 
-export const getAnnouncements = (): Promise<AxiosResponse<{ announcement: string; announcements?: Announcement[] }>> =>
+export const getAnnouncements = (): Promise<AxiosResponse<{ announcement: string; topic?: string; announcements?: Announcement[] }>> =>
   api.get('/announcements');
 
 export const getAnnouncementPermission = (
@@ -245,11 +245,12 @@ export const getAnnouncementPermission = (
   });
 
 export const sendAnnouncement = (
+  topic: string,
   content: string,
   personId?: string,
   personType: string = 'employee'
 ): Promise<AxiosResponse<{ message: string; announcement?: Announcement }>> =>
-  api.post('/announcements', { content, person_id: personId, person_type: personType });
+  api.post('/announcements', { topic, content, person_id: personId, person_type: personType });
 
 export const updatePushToken = (pushToken: string, employeeId: string, personType: string = 'employee'): Promise<AxiosResponse<{ status: string }>> =>
   api.post('/update-push-token', { pushToken, employeeId, personType });

@@ -3,8 +3,10 @@ from backend.models.intern_model import (
     all_interns, add_intern, update_intern,
     delete_intern, count_interns, set_intern_password, get_intern_by_id,
 )
+from backend.utils.activity_log import log_activity
 from backend.utils.photo_utils import delete_profile_file, normalize_photo_path
-from backend.utils.auth import admin_required, auth_required
+from backend.utils.auth import admin_required, auth_required, current_auth
+from backend.utils.authz import can_access_person, is_admin
 from backend.utils.ids import next_intern_id, peek_intern_id
 from backend.utils.passwords import generate_temp_password
 from backend.utils.mailer import send_credentials_email
@@ -42,6 +44,10 @@ def create_intern():
 
     intern_id = add_intern(data)
     set_intern_password(intern_id_value, password)
+    log_activity(
+        "Intern Created",
+        f"{data.get('name') or intern_id_value} ({intern_id_value})",
+    )
 
     email = (data.get("email") or "").strip()
     email_sent, email_reason = False, ""
@@ -64,15 +70,32 @@ def create_intern():
 @intern_bp.route("/api/interns/<intern_id>", methods=["PUT"])
 @auth_required
 def update_int(intern_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    existing = get_intern_by_id(intern_id)
+    auth = current_auth()
+    password = data.get("password")
+    if auth and not is_admin(auth):
+        if not existing or not can_access_person(
+            auth, existing.get("_id"), existing.get("intern_id"), intern_id
+        ):
+            return jsonify({"error": "Forbidden"}), 403
+        allowed = {"name", "phone", "email", "photo_path"}
+        data = {key: value for key, value in data.items() if key in allowed}
+        # A person may never set a password through the profile endpoint;
+        # password changes go through the OTP/change-password flows.
+        password = None
+
     data.pop("_id", None)
     data.pop("password_hash", None)
-    password = data.pop("password", None)
-    existing = get_intern_by_id(intern_id)
+    data.pop("password", None)
     new_photo = normalize_photo_path(data.get("photo_path"))
     if new_photo is not None:
         data["photo_path"] = new_photo
     update_intern(intern_id, data)
+    log_activity(
+        "Intern Updated",
+        f"{(existing or {}).get('name') or data.get('name') or intern_id}",
+    )
     if password:
         intern = all_interns()
         target = next((i for i in intern if i["_id"] == intern_id), None)
@@ -90,6 +113,10 @@ def update_int(intern_id):
 def delete_int(intern_id):
     existing = get_intern_by_id(intern_id)
     delete_intern(intern_id)
+    log_activity(
+        "Intern Deleted",
+        f"{(existing or {}).get('name') or intern_id}",
+    )
     if existing:
         delete_profile_file(existing.get("photo_path"))
     return jsonify({"message": "Deleted"})

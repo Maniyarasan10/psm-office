@@ -46,12 +46,18 @@ export default function Dashboard() {
     <div>
       <div className="stat-grid">
         <div className="stat-card">
+          <div className="stat-number">
+            {data.total_workforce ?? ((data.total_employees || 0) + (data.total_interns || 0))}
+          </div>
+          <div className="stat-label">Total Employees (incl. interns)</div>
+        </div>
+        <div className="stat-card info">
           <div className="stat-number">{data.total_employees}</div>
-          <div className="stat-label">Total Employees</div>
+          <div className="stat-label">Employees</div>
         </div>
         <div className="stat-card info">
           <div className="stat-number">{data.total_interns}</div>
-          <div className="stat-label">Total Interns</div>
+          <div className="stat-label">Interns</div>
         </div>
         <div className="stat-card success">
           <div className="stat-number">{data.present_today}</div>

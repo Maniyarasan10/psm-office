@@ -1,20 +1,12 @@
 import axios from 'axios';
 import API_BASE from './api';
 
-export const AUTH_TOKEN_KEY = 'psm-admin-token';
-
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  // Send/receive the HttpOnly auth cookie set by the backend.
+  withCredentials: true,
 });
 
 api.interceptors.response.use(
@@ -23,8 +15,11 @@ api.interceptors.response.use(
     const { response, config } = error;
     const isLoginRequest = config?.url?.includes('/auth/admin-login');
     if (response?.status === 401 && !isLoginRequest) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      localStorage.removeItem('psm-admin');
+      try {
+        localStorage.removeItem('psm-admin');
+      } catch {
+        // ignore
+      }
       if (!window.location.pathname.startsWith('/login')) {
         window.location.assign('/login');
       }
@@ -139,6 +134,9 @@ export const uploadDocument = (formData) =>
 export const renameDocument = (id, data) =>
   api.put(`/documents/${id}/rename`, data);
 
+export const updateDocumentVisibility = (id, data) =>
+  api.put(`/documents/${id}/visibility`, data);
+
 export const deleteDocument = (id) =>
   api.delete(`/documents/${id}`);
 
@@ -220,6 +218,18 @@ export const getAnnouncement = () =>
 
 export const saveAnnouncement = (data) =>
   api.post('/announcements', data);
+
+export const deleteAnnouncement = (id) =>
+  api.delete(`/announcements/${id}`);
+
+export const getAdminNotifications = (limit = 100) =>
+  api.get('/notifications/activity', { params: { limit } });
+
+export const sendCustomNotification = (data) =>
+  api.post('/notifications/send', data);
+
+export const getCustomNotificationLog = () =>
+  api.get('/notifications/sent');
 
 export const getAnnouncementSenders = () =>
   api.get('/announcement-senders');

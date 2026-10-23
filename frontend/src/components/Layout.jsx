@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { profilePhotoUrl } from '../services/services';
+import { profilePhotoUrl, getAdminNotifications } from '../services/services';
 import {
   HiOutlineViewGrid,
   HiOutlineUsers,
@@ -15,6 +15,7 @@ import {
   HiOutlineCurrencyDollar,
   HiOutlineChartBar,
   HiOutlineSpeakerphone,
+  HiOutlineBell,
   HiOutlineCog,
   HiOutlineSun,
   HiOutlineMoon,
@@ -34,8 +35,33 @@ const navItems = [
   { to: '/finance', label: 'Finance', icon: HiOutlineCurrencyDollar },
   { to: '/reports', label: 'Reports', icon: HiOutlineChartBar },
   { to: '/announcements', label: 'Announcements', icon: HiOutlineSpeakerphone },
+  { to: '/notifications', label: 'Notifications', icon: HiOutlineBell },
   { to: '/settings', label: 'Settings', icon: HiOutlineCog },
 ];
+
+const SEEN_STORAGE_KEY = 'psm-admin-seen';
+
+const parseTime = (value) => {
+  if (!value) return 0;
+  let normalized = String(value);
+  if (/\.\d{3}\d+$/.test(normalized)) {
+    normalized = normalized.replace(/(\.\d{3})\d+$/, '$1');
+  }
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(normalized)) {
+    normalized = `${normalized}Z`;
+  }
+  const time = new Date(normalized).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const readSeenMap = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SEEN_STORAGE_KEY) || '{}');
+    return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+  } catch {
+    return {};
+  }
+};
 
 const pageTitles = {
   '/': { title: 'Dashboard', subtitle: 'Welcome back! Here is your office overview.' },
@@ -49,6 +75,7 @@ const pageTitles = {
   '/finance': { title: 'Finance', subtitle: 'Track income, expenses and transactions.' },
   '/reports': { title: 'Reports', subtitle: 'Generate and export office reports.' },
   '/announcements': { title: 'Announcements', subtitle: 'Manage who can send announcements and publish updates.' },
+  '/notifications': { title: 'Custom Notifications', subtitle: 'Send a notification to everyone or select specific employees and interns.' },
   '/settings': { title: 'Settings', subtitle: 'Configure company and app settings.' },
 };
 
@@ -58,6 +85,8 @@ export default function Layout() {
   const location = useLocation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activity, setActivity] = useState([]);
+  const [seenMap, setSeenMap] = useState(readSeenMap);
   const pageInfo = pageTitles[location.pathname] || pageTitles['/'];
   const profileImage = user?.photo_path ? profilePhotoUrl(user.photo_path) : '/fin.png';
   const profileName = user?.name || user?.username || 'Administrator';
@@ -65,6 +94,72 @@ export default function Layout() {
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
+
+  const persistSeen = useCallback((next) => {
+    setSeenMap(next);
+    try {
+      localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(next));
+    } catch {}
+  }, []);
+
+  const loadActivity = useCallback(async () => {
+    try {
+      const { data } = await getAdminNotifications(100);
+      if (Array.isArray(data)) {
+        setActivity(data);
+        let hasSeenStore = true;
+        try {
+          hasSeenStore = localStorage.getItem(SEEN_STORAGE_KEY) !== null;
+        } catch {
+          hasSeenStore = false;
+        }
+        if (!hasSeenStore) {
+          const now = new Date().toISOString();
+          const baseline = {};
+          navItems.forEach((item) => { baseline[item.to] = now; });
+          persistSeen(baseline);
+        }
+      }
+    } catch {
+      // Keep the last known activity; sidebar badges simply stay as they are.
+    }
+  }, [persistSeen]);
+
+  useEffect(() => {
+    loadActivity();
+    const timer = setInterval(loadActivity, 30000);
+    return () => clearInterval(timer);
+  }, [loadActivity]);
+
+  const markRouteSeen = useCallback((route) => {
+    if (!route) return;
+    setSeenMap((prev) => {
+      const next = { ...prev, [route]: new Date().toISOString() };
+      try {
+        localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const isUnread = useCallback(
+    (item) => {
+      if (!item?.route) return false;
+      const seenAt = parseTime(seenMap[item.route]);
+      return parseTime(item.timestamp) > seenAt;
+    },
+    [seenMap]
+  );
+
+  const unreadByRoute = useMemo(() => {
+    const counts = {};
+    activity.forEach((item) => {
+      if (item.route && isUnread(item)) {
+        counts[item.route] = (counts[item.route] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [activity, isUnread]);
 
   return (
     <div className="app-layout">
@@ -88,10 +183,18 @@ export default function Layout() {
               className={({ isActive }) =>
                 `sidebar-link${isActive ? ' active' : ''}`
               }
-              onClick={() => setSidebarOpen(false)}
+              onClick={() => {
+                setSidebarOpen(false);
+                markRouteSeen(item.to);
+              }}
             >
               <item.icon />
               <span>{item.label}</span>
+              {unreadByRoute[item.to] > 0 && (
+                <span className="sidebar-badge">
+                  {unreadByRoute[item.to] > 99 ? '99+' : unreadByRoute[item.to]}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -117,7 +220,13 @@ export default function Layout() {
               {theme === 'light' ? <HiOutlineMoon size={18} /> : <HiOutlineSun size={18} />}
             </button>
             <div className="header-profile-wrap">
-              <button className="header-profile" onClick={() => setShowProfileMenu((prev) => !prev)} title={profileName}>
+              <button
+                className="header-profile"
+                onClick={() => {
+                  setShowProfileMenu((prev) => !prev);
+                }}
+                title={profileName}
+              >
                 {profileImage ? (
                   <img src={profileImage} alt={profileName} className="header-profile-image" />
                 ) : (

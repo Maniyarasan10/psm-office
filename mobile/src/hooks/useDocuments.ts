@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmployeeDocument } from '../types';
 import { getDocuments, getDocumentCategories, uploadDocument } from '../services/api';
+import { cacheKey, readCache, writeCache } from '../services/offlineCache';
 import { apiErrorMessage } from '../utils/apiError';
+
+interface DocumentsCache {
+  documents: EmployeeDocument[];
+  categories: string[];
+}
 
 export interface DocumentIdentity {
   _id: string;
@@ -52,6 +58,22 @@ export function useDocuments(identity: DocumentIdentity | null): DocumentsData {
   const requestId = useRef(0);
   const actionBusyRef = useRef(false);
 
+  const cacheRef = useRef(cacheKey('documents', identity?._id));
+  cacheRef.current = cacheKey('documents', identity?._id);
+
+  useEffect(() => {
+    let active = true;
+    void readCache<DocumentsCache>(cacheRef.current).then(cached => {
+      if (!active || !cached) return;
+      setDocuments(Array.isArray(cached.data.documents) ? cached.data.documents : []);
+      setCategories(Array.isArray(cached.data.categories) ? cached.data.categories : []);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [identity?._id]);
+
   const stripBase64 = (docs: EmployeeDocument[]): EmployeeDocument[] =>
     docs
       .filter(doc => doc && typeof doc._id === 'string')
@@ -76,8 +98,14 @@ export function useDocuments(identity: DocumentIdentity | null): DocumentsData {
         getDocumentCategories(),
       ]);
       if (id !== requestId.current) return;
-      setDocuments(stripBase64(Array.isArray(docsResponse.data) ? docsResponse.data : []));
-      setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : []);
+      const nextDocuments = stripBase64(Array.isArray(docsResponse.data) ? docsResponse.data : []);
+      const nextCategories = Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [];
+      setDocuments(nextDocuments);
+      setCategories(nextCategories);
+      writeCache<DocumentsCache>(cacheRef.current, {
+        documents: nextDocuments,
+        categories: nextCategories,
+      });
       setError(false);
     } catch {
       if (id !== requestId.current) return;

@@ -54,6 +54,7 @@ export default function HomeScreen() {
     attendance,
     tasks,
     announcement,
+    announcementTopic,
     loading,
     refreshing,
     attendanceError,
@@ -368,6 +369,7 @@ export default function HomeScreen() {
 
         <AnnouncementsSection
           announcement={announcement}
+          topic={announcementTopic}
           error={announcementsError}
           onRetry={reload}
           onView={() => navigation.navigate('Announcements')}
@@ -660,11 +662,13 @@ function TodayWorkSection({
 
 function AnnouncementsSection({
   announcement,
+  topic,
   error,
   onRetry,
   onView,
 }: {
   announcement: string;
+  topic: string;
   error: boolean;
   onRetry: () => void;
   onView: () => void;
@@ -688,7 +692,12 @@ function AnnouncementsSection({
           accessibilityLabel="Open announcements"
         >
           <MaterialCommunityIcons name="bullhorn-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.announcementText} numberOfLines={3}>{announcement}</Text>
+          <View style={styles.announcementContent}>
+            {topic ? (
+              <Text style={styles.announcementTopic} numberOfLines={1}>{topic}</Text>
+            ) : null}
+            <Text style={styles.announcementText} numberOfLines={3}>{announcement}</Text>
+          </View>
         </Pressable>
       ) : (
         <View style={styles.emptyRow}>
@@ -1316,11 +1325,19 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
   },
-  announcementText: {
-    ...typography.body,
-    color: colors.textPrimary,
+  announcementContent: {
     flex: 1,
     marginLeft: spacing.md,
+  },
+  announcementTopic: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  announcementText: {
+    ...typography.body,
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   documentsBox: {

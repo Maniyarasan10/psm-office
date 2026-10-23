@@ -25,3 +25,6 @@ venv/
 uploads/
 backups/
 *.log
+
+# Temporary passwords written by the roster seed script
+roster-credentials.csv

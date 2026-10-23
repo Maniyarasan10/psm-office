@@ -54,18 +54,21 @@ def send_push(tokens, title, body, data=None, sound="default"):
     recipients = [t for t in tokens if isinstance(t, str) and t]
     if not recipients:
         return {"sent": 0, "failed": 0, "retryable": 0, "invalid_removed": 0}
-    messages = [
-        {
+    messages = []
+    for token in recipients:
+        message = {
             "to": token,
-            "title": title,
             "body": body,
             "sound": sound,
             "priority": "high",
             "channelId": CHANNEL_ID,
             "data": data or {},
         }
-        for token in recipients
-    ]
+        # An empty title is omitted instead of sent as "": the OS then shows
+        # the body once, rather than a blank heading above the same text.
+        if title:
+            message["title"] = title
+        messages.append(message)
     try:
         req = urllib.request.Request(
             EXPO_PUSH_URL,

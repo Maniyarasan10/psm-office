@@ -22,7 +22,7 @@ with MongoDB Atlas (M0) and Cloudinary unchanged.
 | Persistent disk for backups | The root disk is persistent; backups live in `backend/backups/` |
 | HTTPS | Caddy issues and renews a Let's Encrypt certificate automatically |
 
-Rejected alternatives: Cloudflare Workers (no raw sockets for PyMongo, ephemeral disk, no threads),
+Rejected alternatives: serverless platforms (no raw sockets for PyMongo, ephemeral disk, no threads),
 Render / Koyeb / Fly (spin down or paid), Railway ($1/month minimum), Cloud Run (scales to zero),
 AWS / Azure free tiers (12 months only), PythonAnywhere (daily restart, no custom domain).
 

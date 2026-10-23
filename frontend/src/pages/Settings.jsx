@@ -205,7 +205,7 @@ export default function Settings() {
         <div className="section-card">
           <h3>Office Location (for Geotag Verification)</h3>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
-            Set the office GPS coordinates to validate employee geotag attendance photos.
+            Stored for reference when reviewing geotag photos. Check-in is currently allowed from any location.
           </p>
           <div className="form-grid">
             <div className="form-group">

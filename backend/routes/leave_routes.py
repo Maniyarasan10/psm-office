@@ -9,6 +9,7 @@ from flask import Blueprint, request, jsonify
 from backend import config
 from backend.models import leave_model
 from backend.utils.auth import admin_required, auth_required, current_auth
+from backend.utils.authz import can_access_person
 from backend.utils.activity_log import log_activity
 from backend.utils.notify import notify_person
 
@@ -19,6 +20,9 @@ leave_bp = Blueprint("leave", __name__)
 @auth_required
 def submit_leave():
     data = request.get_json(silent=True) or {}
+    auth = current_auth()
+    if auth and not can_access_person(auth, data.get("person_id")):
+        return jsonify({"error": "Forbidden"}), 403
     doc, error = leave_model.create_leave_request(
         person_type=data.get("person_type", "employee"),
         person_id=data.get("person_id", ""),
@@ -100,6 +104,11 @@ def get_leave(leave_id):
     doc = leave_model.get_leave_request(leave_id)
     if not doc:
         return jsonify({"error": "Leave request not found"}), 404
+    auth = current_auth()
+    if auth and not can_access_person(
+        auth, doc.get("person_id"), doc.get("employee_id"), doc.get("intern_id")
+    ):
+        return jsonify({"error": "Forbidden"}), 403
     return jsonify(doc)
 
 

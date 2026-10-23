@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Project } from '../types';
 import { getProjects } from '../services/api';
+import { readCache, writeCache } from '../services/offlineCache';
+
+const PROJECTS_CACHE_KEY = 'projects';
 
 export interface ProjectsData {
   projects: Project[];
@@ -24,6 +27,18 @@ export function useProjects(): ProjectsData {
 
   const requestId = useRef(0);
 
+  useEffect(() => {
+    let active = true;
+    void readCache<Project[]>(PROJECTS_CACHE_KEY).then(cached => {
+      if (!active || !cached || !Array.isArray(cached.data)) return;
+      setProjects(cached.data);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const run = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     const id = ++requestId.current;
     if (mode === 'initial') setLoading(true);
@@ -32,7 +47,9 @@ export function useProjects(): ProjectsData {
     try {
       const res = await getProjects();
       if (id !== requestId.current) return;
-      setProjects(Array.isArray(res.data) ? res.data : []);
+      const nextProjects = Array.isArray(res.data) ? res.data : [];
+      setProjects(nextProjects);
+      writeCache(PROJECTS_CACHE_KEY, nextProjects);
       setError(false);
     } catch {
       if (id !== requestId.current) return;

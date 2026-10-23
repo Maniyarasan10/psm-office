@@ -21,16 +21,9 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-.venv-workers/
-python_modules/
-.wrangler/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-
-# Cloudflare Workers prototype - rejected approach (Python Workers cannot open
-# raw sockets to MongoDB Atlas) and it carries a local venv / node_modules.
-backend/cloudflare-flask-api/
 
 # Node / frontends
 node_modules/

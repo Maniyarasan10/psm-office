@@ -6,12 +6,13 @@ import {
 } from '../services/services';
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineCamera } from 'react-icons/hi';
 import { addMonths, format } from 'date-fns';
-import { DEPARTMENTS } from '../constants/options';
+import { DEPARTMENTS, WORK_MODES } from '../constants/options';
 
 const defaultForm = {
   intern_id: '', name: '', college: '', duration: '', email: '',
   department: '', mentor: '', start_date: '', end_date: '',
   remarks: '', photo_path: '', password: '',
+  designation: '', work_mode: '', current_project: '', github: '',
 };
 
 export default function Interns() {
@@ -53,7 +54,13 @@ export default function Interns() {
   const loadInterns = async () => {
     try {
       const res = await getInterns(search || undefined);
-      setInterns(res.data);
+      const sorted = [...(res.data || [])].sort((a, b) =>
+        String(a.intern_id || '').localeCompare(String(b.intern_id || ''), undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        })
+      );
+      setInterns(sorted);
     } catch (err) {
       console.error(err);
     }
@@ -185,6 +192,12 @@ export default function Interns() {
     }
   };
 
+  const modeBadge = (mode) => {
+    if (!mode) return <span className="text-muted">-</span>;
+    const cls = mode === 'Remote' ? 'remote' : mode === 'Hybrid' ? 'hybrid' : 'onsite';
+    return <span className={`badge badge-${cls}`}>{mode}</span>;
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -218,9 +231,13 @@ export default function Interns() {
                 <th style={{ width: 44 }}></th>
                 <th>Intern ID</th>
                 <th>Name</th>
+                <th>Role</th>
                 <th>College</th>
                 <th>Department</th>
                 <th>Mentor</th>
+                <th>Mode</th>
+                <th>Current Project</th>
+                <th>GitHub</th>
                 <th>Duration</th>
                 <th>Actions</th>
               </tr>
@@ -228,26 +245,36 @@ export default function Interns() {
             <tbody>
               {interns.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="empty-state">No interns found.</td>
+                    <td colSpan="11" className="empty-state">No interns found.</td>
                   </tr>
-              ) : (
-                interns.map((intern) => (
-                  <tr key={intern._id}>
-                    <td>
-                      <div className="avatar-sm">
-                        {!imgErrors[intern._id] && profilePhotoUrl(intern.photo_path) ? (
-                          <img src={profilePhotoUrl(intern.photo_path)} alt="" className="avatar-img" onError={() => setImgErrors(prev => ({ ...prev, [intern._id]: true }))} />
+                ) : (
+                  interns.map((intern) => (
+                    <tr key={intern._id}>
+                      <td>
+                        <div className="avatar-sm">
+                          {!imgErrors[intern._id] && profilePhotoUrl(intern.photo_path) ? (
+                            <img src={profilePhotoUrl(intern.photo_path)} alt="" className="avatar-img" onError={() => setImgErrors(prev => ({ ...prev, [intern._id]: true }))} />
+                          ) : (
+                            <span className="avatar-text">{intern.name?.charAt(0)?.toUpperCase() || '?'}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>{intern.intern_id}</td>
+                      <td><strong>{intern.name}</strong></td>
+                      <td>{intern.designation || <span className="text-muted">-</span>}</td>
+                      <td>{intern.college}</td>
+                      <td>{intern.department}</td>
+                      <td>{intern.mentor_name || intern.mentor || '-'}</td>
+                      <td>{modeBadge(intern.work_mode)}</td>
+                      <td>{intern.current_project || <span className="text-muted">-</span>}</td>
+                      <td>
+                        {intern.github ? (
+                          <a href={intern.github} target="_blank" rel="noreferrer" className="table-link">GitHub</a>
                         ) : (
-                          <span className="avatar-text">{intern.name?.charAt(0)?.toUpperCase() || '?'}</span>
+                          <span className="text-muted">-</span>
                         )}
-                      </div>
-                    </td>
-                    <td>{intern.intern_id}</td>
-                    <td><strong>{intern.name}</strong></td>
-                    <td>{intern.college}</td>
-                    <td>{intern.department}</td>
-                    <td>{intern.mentor_name || intern.mentor || '-'}</td>
-                    <td>{intern.duration}</td>
+                      </td>
+                      <td>{intern.duration}</td>
                     <td>
                       <div className="table-actions">
                         <button className="btn btn-secondary btn-icon btn-sm" onClick={() => openEdit(intern)}>
@@ -314,6 +341,39 @@ export default function Interns() {
                       <option key={dept} value={dept}>{dept}</option>
                     ))}
                   </select>
+                </div>
+                <div className="form-group">
+                  <label>Role</label>
+                  <input
+                    value={form.designation}
+                    onChange={(e) => setForm({ ...form, designation: e.target.value })}
+                    placeholder="e.g. Gen AI & LLM Engineer"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Mode</label>
+                  <select value={form.work_mode} onChange={(e) => setForm({ ...form, work_mode: e.target.value })}>
+                    <option value="">Select Mode</option>
+                    {WORK_MODES.map((mode) => (
+                      <option key={mode} value={mode}>{mode}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Current Project</label>
+                  <input
+                    value={form.current_project}
+                    onChange={(e) => setForm({ ...form, current_project: e.target.value })}
+                    placeholder="e.g. psm intern"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>GitHub Link</label>
+                  <input
+                    value={form.github}
+                    onChange={(e) => setForm({ ...form, github: e.target.value })}
+                    placeholder="https://github.com/username"
+                  />
                 </div>
                 <div className="form-group">
                   <label>Mentor</label>

@@ -7,11 +7,11 @@ export default defineConfig({
     port: 3001,
     proxy: {
       '/api': {
-        target: 'https://api.problemsolvingmind.com',
+        target: 'https://psm-office-api-84c884d6ab34.herokuapp.com',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'https://api.problemsolvingmind.com',
+        target: 'https://psm-office-api-84c884d6ab34.herokuapp.com',
         changeOrigin: true,
       },
     },

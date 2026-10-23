@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AttendanceRecord, Task } from '../types';
 import { getMyTasks, getPersonAttendance } from '../services/api';
+import { cacheKey, readCache, writeCache } from '../services/offlineCache';
 
 /** Covers the current month plus generous history for context sections. */
 const ATTENDANCE_LIMIT = 90;
+
+interface WorkSummaryCache {
+  tasks: Task[];
+  records: AttendanceRecord[];
+}
 
 export interface WorkSummaryScope {
   personId: string;
@@ -39,6 +45,22 @@ export function useWorkSummary(scope: WorkSummaryScope | null): WorkSummaryData 
   const scopeRef = useRef<WorkSummaryScope | null>(scope);
   scopeRef.current = scope;
 
+  const cache = cacheKey('work-summary', scope?.personType, scope?.personId);
+
+  useEffect(() => {
+    if (!scope) return;
+    let active = true;
+    void readCache<WorkSummaryCache>(cache).then(cached => {
+      if (!active || !cached) return;
+      setTasks(Array.isArray(cached.data.tasks) ? cached.data.tasks : []);
+      setRecords(Array.isArray(cached.data.records) ? cached.data.records : []);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [cache]);
+
   const run = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     const currentScope = scopeRef.current;
     if (!currentScope) {
@@ -70,6 +92,16 @@ export function useWorkSummary(scope: WorkSummaryScope | null): WorkSummaryData 
       setAttendanceError(false);
     } else {
       setAttendanceError(true);
+    }
+
+    if (tasksResult.status === 'fulfilled' && attendanceResult.status === 'fulfilled') {
+      writeCache<WorkSummaryCache>(
+        cacheKey('work-summary', currentScope.personType, currentScope.personId),
+        {
+          tasks: tasksResult.value.data ?? [],
+          records: Array.isArray(attendanceResult.value.data) ? attendanceResult.value.data : [],
+        }
+      );
     }
 
     setLoading(false);

@@ -6,7 +6,8 @@ receive an empty inbox.
 from flask import Blueprint, request, jsonify
 
 from backend.models import notification_model
-from backend.utils.auth import auth_required, current_auth
+from backend.utils.activity_log import notification_feed
+from backend.utils.auth import admin_required, auth_required, current_auth
 
 notification_bp = Blueprint("notifications", __name__)
 
@@ -16,6 +17,17 @@ def _resolve_person():
     person_type = auth.get("person_type") or request.args.get("person_type") or "employee"
     person_id = auth.get("sub") or request.args.get("person_id")
     return str(person_type).lower(), person_id
+
+
+@notification_bp.route("/api/notifications/activity", methods=["GET"])
+@admin_required
+def admin_activity_feed():
+    """Recent office activity for the admin notification bell and menu badges."""
+    try:
+        limit = max(1, min(int(request.args.get("limit", 100)), 200))
+    except (TypeError, ValueError):
+        limit = 100
+    return jsonify(notification_feed(limit))
 
 
 @notification_bp.route("/api/notifications", methods=["GET"])

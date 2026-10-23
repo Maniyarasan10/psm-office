@@ -22,7 +22,8 @@ from backend.models.support_model import (
 )
 from backend.utils.activity_log import log_activity
 from backend.utils.notify import notify_person
-from backend.utils.auth import admin_required, auth_required
+from backend.utils.auth import admin_required, auth_required, current_auth
+from backend.utils.authz import can_access_person, is_admin
 from backend.utils import storage
 
 support_bp = Blueprint("support", __name__)
@@ -143,6 +144,11 @@ def list_requests():
     query = {}
     person_id = request.args.get("person_id", "").strip()
     person_type = request.args.get("person_type", "").strip()
+    auth = current_auth()
+    if auth and not is_admin(auth):
+        # Employees/interns may only ever list their own tickets.
+        person_id = str(auth.get("sub") or "")
+        person_type = auth.get("person_type") or "employee"
     if person_id:
         query["person_id"] = person_id
         if person_type:
@@ -184,6 +190,11 @@ def list_requests():
 def create_request():
     person_id = request.form.get("person_id", "").strip()
     person_type = request.form.get("person_type", "employee").strip() or "employee"
+    auth = current_auth()
+    if auth and not is_admin(auth):
+        # A signed-in person can only open tickets for themselves.
+        person_id = str(auth.get("sub") or "")
+        person_type = auth.get("person_type") or "employee"
     category = request.form.get("category", "").strip()
     subject = request.form.get("subject", "").strip()
     description = request.form.get("description", "").strip()
@@ -240,8 +251,8 @@ def get_request(ticket_id):
     if not doc:
         return jsonify({"error": "Ticket not found"}), 404
 
-    person_id = request.args.get("person_id", "").strip()
-    if person_id and doc.get("person_id") != person_id:
+    auth = current_auth()
+    if auth and not can_access_person(auth, doc.get("person_id")):
         return jsonify({"error": "Forbidden"}), 403
     return jsonify(_public_ticket(doc))
 
@@ -257,14 +268,22 @@ def add_response(ticket_id):
     body = request.form.get("body", "").strip()
     author_name = request.form.get("author_name", "").strip()
 
+    auth = current_auth()
+    if auth:
+        if not can_access_person(auth, doc.get("person_id")):
+            return jsonify({"error": "Forbidden"}), 403
+        if not is_admin(auth):
+            # Only support staff may post support replies; everyone else is
+            # the ticket owner speaking for themselves.
+            author_type = "employee"
+            author_name = auth.get("name") or doc.get("person_label", "")
+            if doc.get("status") in {"cancelled", "closed"}:
+                return jsonify({"error": "This ticket is closed"}), 400
+
     if author_type not in {"employee", "support"}:
         return jsonify({"error": "author_type must be employee or support"}), 400
 
     if author_type == "employee":
-        person_id = request.form.get("person_id", "").strip()
-        person_type = request.form.get("person_type", "employee").strip()
-        if doc.get("person_id") != str(person_id):
-            return jsonify({"error": "Forbidden"}), 403
         if doc.get("status") in {"cancelled", "closed"}:
             return jsonify({"error": "This ticket is closed"}), 400
         author_name = author_name or doc.get("person_label", "")
@@ -330,9 +349,14 @@ def cancel_request(ticket_id):
     doc = find_ticket(ticket_id)
     if not doc:
         return jsonify({"error": "Ticket not found"}), 404
-    person_id = (request.get_json() or {}).get("person_id", "").strip()
-    if not person_id or doc.get("person_id") != str(person_id):
-        return jsonify({"error": "Forbidden"}), 403
+    auth = current_auth()
+    if auth:
+        if not can_access_person(auth, doc.get("person_id")):
+            return jsonify({"error": "Forbidden"}), 403
+    else:
+        person_id = (request.get_json() or {}).get("person_id", "").strip()
+        if not person_id or doc.get("person_id") != str(person_id):
+            return jsonify({"error": "Forbidden"}), 403
     if doc.get("status") not in EMPLOYEE_CANCEL_FROM:
         return jsonify({"error": "Ticket cannot be cancelled in its current state"}), 400
 
@@ -351,9 +375,14 @@ def reopen_request(ticket_id):
     doc = find_ticket(ticket_id)
     if not doc:
         return jsonify({"error": "Ticket not found"}), 404
-    person_id = (request.get_json() or {}).get("person_id", "").strip()
-    if not person_id or doc.get("person_id") != str(person_id):
-        return jsonify({"error": "Forbidden"}), 403
+    auth = current_auth()
+    if auth:
+        if not can_access_person(auth, doc.get("person_id")):
+            return jsonify({"error": "Forbidden"}), 403
+    else:
+        person_id = (request.get_json() or {}).get("person_id", "").strip()
+        if not person_id or doc.get("person_id") != str(person_id):
+            return jsonify({"error": "Forbidden"}), 403
     if doc.get("status") not in EMPLOYEE_REOPEN_FROM:
         return jsonify({"error": "Ticket cannot be reopened in its current state"}), 400
 
@@ -372,9 +401,14 @@ def confirm_resolution(ticket_id):
     doc = find_ticket(ticket_id)
     if not doc:
         return jsonify({"error": "Ticket not found"}), 404
-    person_id = (request.get_json() or {}).get("person_id", "").strip()
-    if not person_id or doc.get("person_id") != str(person_id):
-        return jsonify({"error": "Forbidden"}), 403
+    auth = current_auth()
+    if auth:
+        if not can_access_person(auth, doc.get("person_id")):
+            return jsonify({"error": "Forbidden"}), 403
+    else:
+        person_id = (request.get_json() or {}).get("person_id", "").strip()
+        if not person_id or doc.get("person_id") != str(person_id):
+            return jsonify({"error": "Forbidden"}), 403
     if doc.get("status") != "resolved":
         return jsonify({"error": "Ticket must be resolved before confirming"}), 400
 
@@ -445,6 +479,9 @@ def download_attachment(attachment_id):
     doc, _ = find_ticket_by_attachment(attachment_id)
     if not doc:
         return jsonify({"error": "Attachment not found"}), 404
+    auth = current_auth()
+    if auth and not can_access_person(auth, doc.get("person_id")):
+        return jsonify({"error": "Forbidden"}), 403
     match = None
     for att in doc.get("attachments", []):
         if att.get("attachment_id") == attachment_id:

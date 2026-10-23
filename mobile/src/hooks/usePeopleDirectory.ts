@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DirectoryPerson, PersonType } from '../types';
 import { getEmployees, getInterns, RawPersonRecord } from '../services/api';
 import { toDirectoryPerson, sortPeopleByName } from '../utils/people';
+import { readCache, writeCache } from '../services/offlineCache';
+
+const PEOPLE_CACHE_KEY = 'people';
 
 export interface DirectorySection {
   title: string;
@@ -38,6 +41,18 @@ export function usePeopleDirectory(): PeopleDirectoryData {
 
   const requestId = useRef(0);
 
+  useEffect(() => {
+    let active = true;
+    void readCache<DirectoryPerson[]>(PEOPLE_CACHE_KEY).then(cached => {
+      if (!active || !cached || !Array.isArray(cached.data)) return;
+      setPeople(cached.data);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const run = useCallback(async (mode: 'initial' | 'refresh') => {
     const id = ++requestId.current;
     if (mode === 'initial') setLoading(true);
@@ -60,7 +75,9 @@ export function usePeopleDirectory(): PeopleDirectoryData {
       const interns = map(internsResponse.data, 'intern');
 
       if (id !== requestId.current) return;
-      setPeople([...employees, ...interns]);
+      const nextPeople = [...employees, ...interns];
+      setPeople(nextPeople);
+      writeCache(PEOPLE_CACHE_KEY, nextPeople);
       setError(false);
     } catch {
       if (id !== requestId.current) return;

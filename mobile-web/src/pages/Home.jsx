@@ -207,7 +207,7 @@ export default function Home() {
             <button className="action-btn clock-in-btn" onClick={handleClockIn}>
               <FiCamera size={36} />
               <span className="action-btn-text">Clock In</span>
-              <span className="action-btn-sub">Use GPS to confirm your location</span>
+              <span className="action-btn-sub">Check in from anywhere</span>
             </button>
           ) : !attendance?.clock_out ? (
             <button

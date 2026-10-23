@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Employee } from '../types';
 import { RECENT_SEARCHES_STORAGE_KEY } from '../hooks/useRecentSearches';
 import { setAuthToken, clearAuthToken, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY, setOnAuthFailure } from '../services/api';
+import { clearOfflineCache } from '../services/offlineCache';
 
 interface AuthContextType {
   employee: Employee | null;
@@ -121,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEmployee(null);
       clearAuthToken();
       await AsyncStorage.multiRemove([EMPLOYEE_STORAGE_KEY, RECENT_SEARCHES_STORAGE_KEY, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY]);
+      clearOfflineCache();
     } catch (err) {
       console.error('Failed to clear auth:', err);
     }

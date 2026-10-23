@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Task, TaskStatus } from '../types';
 import { addTaskComment, getMyTasks, updateTaskStatus } from '../services/api';
+import { cacheKey, readCache, writeCache } from '../services/offlineCache';
 
 export interface TasksScope {
   personId: string;
@@ -44,6 +45,21 @@ export function useTasks(scope: TasksScope | null): TasksData {
   const scopeRef = useRef<TasksScope | null>(scope);
   scopeRef.current = scope;
 
+  const cache = cacheKey('tasks', scope?.personType, scope?.personId);
+
+  useEffect(() => {
+    if (!scope) return;
+    let active = true;
+    void readCache<Task[]>(cache).then(cached => {
+      if (!active || !cached || !Array.isArray(cached.data)) return;
+      setTasks(cached.data);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [cache]);
+
   const run = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     const currentScope = scopeRef.current;
     if (!currentScope) {
@@ -59,7 +75,9 @@ export function useTasks(scope: TasksScope | null): TasksData {
     try {
       const res = await getMyTasks(currentScope.personId, currentScope.personType);
       if (id !== requestId.current) return;
-      setTasks(res.data ?? []);
+      const nextTasks = res.data ?? [];
+      setTasks(nextTasks);
+      writeCache(cacheKey('tasks', currentScope.personType, currentScope.personId), nextTasks);
       setError(false);
     } catch {
       if (id !== requestId.current) return;

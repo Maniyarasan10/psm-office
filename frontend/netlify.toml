@@ -13,6 +13,21 @@
   to = "/index.html"
   status = 200
 
+# Same-origin API: the panel calls /api/* (VITE_API_URL=/api) and Netlify
+# forwards those calls to the API host, so the browser never makes a
+# cross-origin request and no proxy service is needed.
+[[redirects]]
+  from = "/api/*"
+  to = "https://psm-office-api-84c884d6ab34.herokuapp.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/uploads/*"
+  to = "https://psm-office-api-84c884d6ab34.herokuapp.com/uploads/:splat"
+  status = 200
+  force = true
+
 # Cache hashed build assets forever.
 [[headers]]
   for = "/assets/*"

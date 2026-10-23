@@ -5,6 +5,7 @@ import {
   getPersonAttendanceSummary,
   getTodayAttendance,
 } from '../services/api';
+import { cacheKey, readCache, writeCache } from '../services/offlineCache';
 
 const DASHBOARD_HISTORY_LIMIT = 200;
 
@@ -32,6 +33,27 @@ export function useAttendanceDashboard(personId: string): AttendanceDashboardDat
   const personIdRef = useRef(personId);
   personIdRef.current = personId;
 
+  useEffect(() => {
+    if (!personId) return;
+    let active = true;
+    void Promise.all([
+      readCache<AttendanceRecord[]>(cacheKey('attendance-records', personId)),
+      readCache<AttendanceSummary>(cacheKey('attendance-summary', personId)),
+    ]).then(([cachedRecords, cachedSummary]) => {
+      if (!active) return;
+      if (cachedRecords && Array.isArray(cachedRecords.data)) {
+        setRecords(cachedRecords.data);
+        setLoading(false);
+      }
+      if (cachedSummary && cachedSummary.data) {
+        setSummary(cachedSummary.data);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [personId]);
+
   const run = useCallback(async (mode: 'initial' | 'refresh') => {
     const currentPersonId = personIdRef.current;
     if (!currentPersonId) {
@@ -55,7 +77,9 @@ export function useAttendanceDashboard(personId: string): AttendanceDashboardDat
     if (id !== requestId.current) return;
 
     if (recordsResult.status === 'fulfilled') {
-      setRecords(recordsResult.value.data ?? []);
+      const nextRecords = recordsResult.value.data ?? [];
+      setRecords(nextRecords);
+      writeCache(cacheKey('attendance-records', currentPersonId), nextRecords);
       setError(false);
     } else {
       setError(true);
@@ -63,6 +87,7 @@ export function useAttendanceDashboard(personId: string): AttendanceDashboardDat
 
     if (summaryResult.status === 'fulfilled') {
       setSummary(summaryResult.value.data);
+      writeCache(cacheKey('attendance-summary', currentPersonId), summaryResult.value.data);
     }
 
     if (todayResult.status === 'fulfilled') {

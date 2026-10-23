@@ -118,8 +118,8 @@ export default function CameraScreen({ navigation }: Props) {
           <MaterialCommunityIcons name="map-marker-radius" size={64} color={colors.primary} />
         </View>
 
-        <Text style={styles.title}>GPS Location</Text>
-        <Text style={styles.subtitle}>Your current location will be recorded</Text>
+        <Text style={styles.title}>Location</Text>
+        <Text style={styles.subtitle}>Your current location will be recorded when available. You can check in from anywhere.</Text>
 
         {location && (
           <View style={styles.locationCard}>
@@ -165,7 +165,6 @@ export default function CameraScreen({ navigation }: Props) {
           style={styles.confirmBtn}
           onPress={confirmAndUpload}
           loading={uploading}
-          disabled={!location}
           accessibilityLabel="Confirm attendance"
         >
           <MaterialCommunityIcons name="check-circle" size={20} color={colors.textInverted} />

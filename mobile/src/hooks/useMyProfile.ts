@@ -8,6 +8,7 @@ import {
   uploadProfilePhoto,
 } from '../services/api';
 import { toDirectoryPerson } from '../utils/people';
+import { cacheKey, readCache, writeCache } from '../services/offlineCache';
 
 export interface ProfileEditFields {
   name?: string;
@@ -45,6 +46,21 @@ export function useMyProfile(personType: 'employee' | 'intern', personId: string
   const requestId = useRef(0);
   const actionBusyRef = useRef(false);
 
+  const cache = cacheKey('profile', personType, personId);
+
+  useEffect(() => {
+    if (!personId) return;
+    let active = true;
+    void readCache<DirectoryPerson>(cache).then(cached => {
+      if (!active || !cached || !cached.data) return;
+      setProfile(cached.data);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [cache, personId]);
+
   const run = useCallback(
     async (mode: 'initial' | 'refresh' | 'silent') => {
       const id = ++requestId.current;
@@ -66,7 +82,9 @@ export function useMyProfile(personType: 'employee' | 'intern', personId: string
 
         if (id !== requestId.current) return;
         if (raw && raw.name) {
-          setProfile(toDirectoryPerson(raw, personType));
+          const nextProfile = toDirectoryPerson(raw, personType);
+          setProfile(nextProfile);
+          writeCache(cacheKey('profile', personType, personId), nextProfile);
           setError(false);
         } else {
           setError(true);
@@ -147,7 +165,10 @@ export function useMyProfile(personType: 'employee' | 'intern', personId: string
             }
           : undefined;
 
-        if (updated) setProfile(updated);
+        if (updated) {
+          setProfile(updated);
+          writeCache(cacheKey('profile', personType, personId), updated);
+        }
 
         return { ok: true, message: 'Profile updated successfully.', updated };
       } catch {

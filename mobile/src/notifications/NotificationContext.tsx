@@ -75,11 +75,20 @@ interface StoredInbox {
   items: InAppNotification[];
 }
 
+// A push with no message body repeats the title as its body. Drop that copy so
+// the title is rendered once instead of appearing as both a heading and text.
+function cleanBody(title: string, body?: string | null): string | undefined {
+  const trimmed = typeof body === 'string' ? body.trim() : '';
+  if (!trimmed) return undefined;
+  if (trimmed === (title || '').trim()) return undefined;
+  return trimmed;
+}
+
 function toPayload(input: InputNotification): NotificationPayload {
   return {
     id: input.identifier,
     title: input.title,
-    body: input.body ?? undefined,
+    body: cleanBody(input.title, input.body),
     route: resolveRouteFromData(input.data),
   };
 }
@@ -118,7 +127,7 @@ function fromServer(item: ServerNotification): InAppNotification {
   return {
     id: `${SERVER_ID_PREFIX}${item._id}`,
     title: item.title,
-    body: item.body || undefined,
+    body: cleanBody(item.title, item.body),
     receivedAt: parseServerTimestamp(item.created_at),
     read: Boolean(item.read),
     route: routeFromServer(item),
@@ -126,8 +135,8 @@ function fromServer(item: ServerNotification): InAppNotification {
 }
 
 // Two entries describe the same event when their title and message match. An
-// empty body is treated as the title (the backend pushes `body || title`), so a
-// push and its stored inbox copy still collapse onto one another.
+// empty body is treated as the title, so a push and its stored inbox copy
+// still collapse onto one another after duplicate bodies are stripped.
 function dedupeKeyOf(n: InAppNotification): string {
   return `${n.title}\u0000${n.body || n.title}`;
 }
@@ -241,6 +250,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
                     (n): n is InAppNotification =>
                       !!n && typeof n.id === 'string' && typeof n.title === 'string'
                   )
+                  .map(n => ({ ...n, body: cleanBody(n.title, n.body) }))
                   .slice(0, MAX_STORED_NOTIFICATIONS);
               }
             }

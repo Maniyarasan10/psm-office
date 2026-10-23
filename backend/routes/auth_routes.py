@@ -10,6 +10,7 @@ from backend.models.password_reset_model import (
 from backend.utils.mailer import send_password_otp_email
 from backend.utils.auth import issue_token, verify_token, admin_required, auth_required, current_auth
 from backend.utils.ratelimit import rate_limit
+from backend.utils import token_versions
 from backend import config
 
 auth_bp = Blueprint("auth", __name__)
@@ -71,7 +72,7 @@ def admin_login():
         return jsonify({"error": "Invalid admin credentials"}), 401
 
     token = issue_token("admin", "admin", display_name=admin_user)
-    return jsonify({
+    response = jsonify({
         "_id": "admin",
         "username": admin_user,
         "name": "Administrator",
@@ -79,6 +80,18 @@ def admin_login():
         "photo_path": os.getenv("ADMIN_PHOTO_PATH", "/fin.png"),
         "token": token,
     })
+    # Browser admin panel authenticates with this HttpOnly cookie; the token
+    # in the JSON body remains for backwards-compatible non-browser clients.
+    response.set_cookie(
+        config.auth_cookie_name(),
+        token,
+        max_age=config.token_ttl(),
+        httponly=True,
+        secure=config.auth_cookie_secure(),
+        samesite=config.auth_cookie_samesite(),
+        path="/",
+    )
+    return response
 
 
 @auth_bp.route("/api/auth/login", methods=["POST"])
@@ -184,11 +197,13 @@ def change_password():
         if not intern:
             return jsonify({"error": "Current password is incorrect"}), 401
         set_intern_password(user_id, new_password)
+        token_versions.invalidate_person(intern.get("_id"))
     else:
         employee = verify_password(user_id, old_password)
         if not employee:
             return jsonify({"error": "Current password is incorrect"}), 401
         set_password(user_id, new_password)
+        token_versions.invalidate_person(employee.get("_id"))
 
     return jsonify({"message": "Password changed successfully"})
 
@@ -213,11 +228,13 @@ def admin_set_password():
         if not intern:
             return jsonify({"error": "Intern not found"}), 404
         set_intern_password(user_id, new_password)
+        token_versions.invalidate_person(intern.get("_id"))
     else:
         emp = get_employee_by_id(user_id)
         if not emp:
             return jsonify({"error": "Employee not found"}), 404
         set_password(user_id, new_password)
+        token_versions.invalidate_person(emp.get("_id"))
 
     return jsonify({"message": "Password set successfully"})
 
@@ -271,6 +288,9 @@ def forgot_password_reset():
         set_intern_password(identifier, new_password)
     else:
         set_password(identifier, new_password)
+    person = find_person(identifier)
+    if person and person.get("_id"):
+        token_versions.invalidate_person(person["_id"])
     return jsonify({"message": "Password reset successfully. You can sign in now."})
 
 
@@ -298,6 +318,33 @@ def admin_send_reset_otp():
     if not sent:
         return jsonify({"error": reason}), 502
     return jsonify({"message": f"Reset code sent to {person['email']}", "email": person["email"]})
+
+
+@auth_bp.route("/api/auth/logout", methods=["POST"])
+@auth_required
+def logout():
+    """Invalidate the caller's tokens without affecting anyone else."""
+    auth = current_auth() or {}
+    if auth.get("role") == "admin":
+        token_versions.revoke_everyone()
+    else:
+        token_versions.invalidate_person(auth.get("sub"))
+    response = jsonify({"message": "Signed out"})
+    response.delete_cookie(
+        config.auth_cookie_name(),
+        path="/",
+        secure=config.auth_cookie_secure(),
+        samesite=config.auth_cookie_samesite(),
+    )
+    return response
+
+
+@auth_bp.route("/api/auth/revoke-tokens", methods=["POST"])
+@admin_required
+def revoke_tokens():
+    """Emergency revoke-all: every issued access/refresh token stops working."""
+    version = token_versions.revoke_everyone()
+    return jsonify({"message": "All sessions revoked", "version": version})
 
 
 @auth_bp.route("/api/update-push-token", methods=["POST"])

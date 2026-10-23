@@ -25,7 +25,7 @@ def all_employees(search=None):
     # The password hash is never sent to a client and only makes the
     # documents heavier on the wire.
     docs = list(
-        db.employees.find(query, {"password_hash": 0}).sort("created_at", -1)
+        db.employees.find(query, {"password_hash": 0}).sort("employee_id", 1)
     )
     return [serialize_doc(d) for d in docs]
 
@@ -67,6 +67,21 @@ def count_employees():
 def count_active_employees():
     db = get_db()
     return db.employees.count_documents({"status": "Active"})
+
+
+def count_remote_workers():
+    """Active employees plus interns whose work mode is Remote.
+
+    The dashboard counts the roster (what each person is assigned to), not a
+    single day's attendance: a mode change made on the Employees/Interns page
+    must be visible on the dashboard immediately.
+    """
+    db = get_db()
+    remote_employees = db.employees.count_documents(
+        {"work_mode": "Remote", "status": "Active"}
+    )
+    remote_interns = db.interns.count_documents({"work_mode": "Remote"})
+    return remote_employees + remote_interns
 
 
 def upcoming_birthdays(days=30):

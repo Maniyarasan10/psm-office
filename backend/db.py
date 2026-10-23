@@ -11,6 +11,46 @@ _db = None
 # resolved lazily, so the target can change at runtime (tests point at a
 # throwaway database); when it does, the client is rebuilt.
 _connection_key = None
+_dns_configured = False
+
+
+def _configure_dns():
+    """Point dnspython at fast resolvers before an ``srv`` URI is parsed.
+
+    ``mongodb+srv://`` is resolved by dnspython, not by the socket layer. A slow
+    system resolver (common on mobile hotspots) exhausts the lookup lifetime and
+    pymongo reports "MongoDB unavailable" even though the network is fine. The
+    resolvers from ``MONGO_DNS_SERVERS`` are tried first, then the system ones,
+    with short per-server timeouts so one dead server cannot stall the whole
+    lookup.
+    """
+    global _dns_configured
+
+    if _dns_configured:
+        return
+    _dns_configured = True
+
+    servers = config.mongo_dns_servers()
+    if not servers:
+        return
+
+    try:
+        import dns.resolver
+    except ImportError:  # dnspython is only needed for srv URIs
+        return
+
+    try:
+        resolver = dns.resolver.Resolver(configure=True)
+        system = [server for server in resolver.nameservers if server]
+    except Exception:
+        resolver = dns.resolver.Resolver(configure=False)
+        system = []
+
+    resolver.nameservers = servers + [server for server in system if server not in servers]
+    resolver.timeout = 2.5
+    resolver.lifetime = 10
+    # dnspython 2.x exposes no public setter; module-level resolve() reads this.
+    dns.resolver._default_resolver = resolver
 
 
 def _close_client():
@@ -40,6 +80,7 @@ def get_db():
 
     if _db is None:
         try:
+            _configure_dns()
             _client = MongoClient(
                 uri,
                 serverSelectionTimeoutMS=config.mongo_server_selection_timeout_ms(),

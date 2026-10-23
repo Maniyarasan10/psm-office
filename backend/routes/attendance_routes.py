@@ -11,6 +11,7 @@ from backend.utils.activity_log import log_activity
 from backend.utils.photo_utils import store_photo
 from backend.utils.uploads import validate_image_upload
 from backend.utils.auth import admin_required, auth_required, current_auth
+from backend.utils.authz import can_access_person, is_admin
 from backend.realtime import notify_event
 from backend.db import get_db
 from datetime import date as date_type
@@ -94,6 +95,14 @@ def get_attendance():
     target_date = request.args.get("date", date_type.today().isoformat())
     roster = _build_roster(target_date)
     summary = today_summary(target_date)
+    auth = current_auth()
+    if auth and not is_admin(auth):
+        roster = [
+            row for row in roster
+            if can_access_person(
+                auth, row.get("person_id"), row.get("employee_id")
+            )
+        ]
     return jsonify({"roster": roster, "summary": summary})
 
 
@@ -101,6 +110,9 @@ def get_attendance():
 @auth_required
 def get_person_attendance(person_id):
     limit = int(request.args.get("limit", 30))
+    auth = current_auth()
+    if auth and not can_access_person(auth, person_id):
+        return jsonify({"error": "Forbidden"}), 403
     _backfill_person(person_id)
     records = for_person(person_id, limit)
     return jsonify(records)
@@ -109,6 +121,9 @@ def get_person_attendance(person_id):
 @attendance_bp.route("/api/attendance/person/<person_id>/summary", methods=["GET"])
 @auth_required
 def get_person_summary(person_id):
+    auth = current_auth()
+    if auth and not can_access_person(auth, person_id):
+        return jsonify({"error": "Forbidden"}), 403
     _backfill_person(person_id)
     summary = person_summary(person_id)
     return jsonify(summary)
@@ -129,7 +144,7 @@ def confirm_attendance():
 
     # A non-admin may only confirm attendance for their own record.
     auth = current_auth()
-    if auth and auth.get("role") != "admin" and str(auth.get("sub")) != str(person_id):
+    if auth and not can_access_person(auth, person_id):
         return jsonify({"error": "Forbidden"}), 403
 
     photo_path = None
@@ -192,7 +207,10 @@ def mark_attendance():
 @attendance_bp.route("/api/attendance/clock-in", methods=["POST"])
 @auth_required
 def clock_in_route():
-    data = request.get_json()
+    data = request.get_json() or {}
+    auth = current_auth()
+    if auth and not can_access_person(auth, data.get("person_id")):
+        return jsonify({"error": "Forbidden"}), 403
     clock_in(
         person_type=data["person_type"],
         person_id=data["person_id"],
@@ -207,7 +225,10 @@ def clock_in_route():
 @attendance_bp.route("/api/attendance/clock-out", methods=["POST"])
 @auth_required
 def clock_out_route():
-    data = request.get_json()
+    data = request.get_json() or {}
+    auth = current_auth()
+    if auth and not can_access_person(auth, data.get("person_id")):
+        return jsonify({"error": "Forbidden"}), 403
     clock_out(
         person_type=data["person_type"],
         person_id=data["person_id"],
@@ -241,6 +262,9 @@ def leave_request():
     from backend.models.leave_model import create_leave_request
 
     data = request.get_json(silent=True) or {}
+    auth = current_auth()
+    if auth and not can_access_person(auth, data.get("person_id")):
+        return jsonify({"error": "Forbidden"}), 403
     doc, error = create_leave_request(
         person_type=data.get("person_type", "employee"),
         person_id=data.get("person_id", ""),

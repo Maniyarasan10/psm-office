@@ -102,8 +102,8 @@ export default function MarkAttendance() {
           <FiMapPin size={64} />
         </div>
 
-        <h2 className="mark-title">GPS Location</h2>
-        <p className="mark-sub">Your current location will be recorded</p>
+        <h2 className="mark-title">Location</h2>
+        <p className="mark-sub">Your current location will be recorded when available. You can check in from anywhere.</p>
 
         {location && (
           <div className="location-card">
@@ -154,7 +154,7 @@ export default function MarkAttendance() {
         <button
           className="confirm-btn"
           onClick={confirmAndUpload}
-          disabled={uploading || !location}
+          disabled={uploading}
         >
           {uploading ? (
             <FiLoader className="spin" size={18} />

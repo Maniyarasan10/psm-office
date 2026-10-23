@@ -2,8 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AttendanceRecord, LeaveRequest } from '../types';
 import { getPersonAttendance, getMyLeaveRequests, submitLeaveRequest } from '../services/api';
 import { LeaveType } from '../utils/leave';
+import { cacheKey, readCache, writeCache } from '../services/offlineCache';
 
 const ABSENCE_LIMIT = 30;
+
+interface LeaveCache {
+  absenceDays: AttendanceRecord[];
+  requests: LeaveRequest[];
+}
 
 export interface LeaveScope {
   personId: string;
@@ -51,6 +57,22 @@ export function useLeave(scope: LeaveScope | null): LeaveData {
   const scopeRef = useRef<LeaveScope | null>(scope);
   scopeRef.current = scope;
 
+  const cache = cacheKey('leave', scope?.personType, scope?.personId);
+
+  useEffect(() => {
+    if (!scope) return;
+    let active = true;
+    void readCache<LeaveCache>(cache).then(cached => {
+      if (!active || !cached) return;
+      setAbsenceDays(Array.isArray(cached.data.absenceDays) ? cached.data.absenceDays : []);
+      setRequests(Array.isArray(cached.data.requests) ? cached.data.requests : []);
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [cache]);
+
   const run = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     const currentScope = scopeRef.current;
     if (!currentScope) {
@@ -80,6 +102,10 @@ export function useLeave(scope: LeaveScope | null): LeaveData {
         ? requestsResponse.data.requests
         : [];
       setRequests(list);
+      writeCache<LeaveCache>(
+        cacheKey('leave', currentScope.personType, currentScope.personId),
+        { absenceDays: absent, requests: list }
+      );
       setError(false);
     } catch {
       if (id !== requestId.current) return;

@@ -7,8 +7,16 @@ from backend.models.settings_model import (
 )
 from backend.utils.activity_log import log_activity, recent_activity
 from backend.models.note_model import get_note, save_note
-from backend.models.announcement_model import add_announcement, list_announcements
-from backend.models.employee_model import count_active_employees, upcoming_birthdays
+from backend.models.announcement_model import (
+    add_announcement,
+    list_announcements,
+    delete_announcement,
+)
+from backend.models.employee_model import (
+    count_active_employees,
+    count_remote_workers,
+    upcoming_birthdays,
+)
 from backend.models.intern_model import count_interns
 from backend.models.task_model import task_counts, upcoming_tasks
 from backend.models.attendance_model import (
@@ -24,12 +32,12 @@ from backend.utils.auth import (
     can_send_announcement,
     current_auth,
 )
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 
 settings_bp = Blueprint("settings", __name__)
 
 
-def _broadcast_announcement(content):
+def _broadcast_announcement(content, topic=None):
     """Persist an inbox entry for everyone and push to every registered device."""
     if not content:
         return
@@ -43,19 +51,172 @@ def _broadcast_announcement(content):
             if isinstance(token, str) and token:
                 tokens.append(token)
     body = content if len(content) <= 200 else content[:197] + "..."
+    title = (topic or "").strip() or "New announcement"
     if recipients:
         notification_model.add_bulk_notifications(
-            recipients, "New announcement", body,
+            recipients, title, body,
             route="announcements", category="Announcement",
         )
+    # Nudge open apps so the Announcements screen reloads while it is visible.
+    try:
+        from backend.realtime import notify_all
+        notify_all("announcement")
+    except Exception:
+        pass
     if not tokens:
         return
-    send_push(tokens, "New announcement", body, data={"route": "announcements"})
+    send_push(tokens, title, body, data={"route": "announcements"})
+
+
+def _broadcast_custom_notification(title, body="", route="notifications",
+                                   category="Notification", recipients=None):
+    """Broadcast a custom notification to selected people or everyone.
+
+    ``recipients`` is an optional list of ``(person_type, person_id)`` pairs.
+    When omitted every employee and intern receives the notification.
+
+    Returns a summary with the number of inbox recipients and the number of
+    devices that received a push notification.
+    """
+    summary = {"recipients": 0, "pushed": 0}
+    if not title and not body:
+        return summary
+    db = get_db()
+    requested = None
+    if recipients is not None:
+        requested = {
+            (str(ptype).lower(), str(person_id))
+            for ptype, person_id in recipients
+            if person_id
+        }
+        if not requested:
+            return summary
+    tokens = []
+    targets = []
+    if db is not None:
+        for collection, ptype in ((db.employees, "employee"), (db.interns, "intern")):
+            for doc in collection.find({}, {"push_token": 1}):
+                key = (ptype, str(doc.get("_id")))
+                if requested is not None and key not in requested:
+                    continue
+                targets.append(key)
+                token = doc.get("push_token")
+                if isinstance(token, str) and token:
+                    tokens.append(token)
+    if requested is not None and not targets:
+        return summary
+    notification_title = (title or "").strip() or "Notification"
+    notification_body = (body or "").strip()
+    if targets:
+        try:
+            notification_model.add_bulk_notifications(
+                targets, notification_title, notification_body,
+                route=route, category=category,
+            )
+        except Exception:
+            pass
+    summary["recipients"] = len(targets)
+    try:
+        from backend.realtime import notify_all
+        notify_all("notification")
+    except Exception:
+        pass
+    if tokens:
+        try:
+            # With no message body the title is the whole notification. Pass it
+            # as the body and leave the title empty so Android/iOS render the
+            # text once instead of repeating it as title + body.
+            if notification_body:
+                send_push(tokens, notification_title, notification_body, data={"route": route})
+            else:
+                send_push(tokens, "", notification_title, data={"route": route})
+            summary["pushed"] = len(tokens)
+        except Exception:
+            pass
+    if db is not None:
+        try:
+            db.custom_notifications.insert_one({
+                "title": notification_title,
+                "body": notification_body,
+                "route": route,
+                "category": category,
+                "recipients": summary["recipients"],
+                "pushed": summary["pushed"],
+                "sent_at": datetime.utcnow(),
+            })
+        except Exception:
+            pass
+    return summary
+
+
+@settings_bp.route("/api/notifications/send", methods=["POST"])
+@admin_required
+def send_custom_notification():
+    """Send an admin-authored notification to everyone or selected people."""
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    body = (data.get("body") or "").strip()
+    if not title:
+        return jsonify({"error": "Notification title is required"}), 400
+
+    send_to_all = bool(data.get("send_to_all"))
+    raw_recipients = data.get("recipients")
+    recipients = None
+    if not send_to_all and raw_recipients is not None:
+        recipients = []
+        seen = set()
+        if isinstance(raw_recipients, list):
+            for item in raw_recipients:
+                if not isinstance(item, dict):
+                    continue
+                person_id = item.get("person_id")
+                person_type = (item.get("person_type") or "employee").strip().lower()
+                if not person_id or person_type not in ("employee", "intern"):
+                    continue
+                key = f"{person_type}:{person_id}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                recipients.append((person_type, str(person_id)))
+        if not recipients:
+            return jsonify({"error": "Select at least one recipient"}), 400
+
+    summary = _broadcast_custom_notification(title, body, recipients=recipients)
+    if recipients is not None and summary["recipients"] == 0:
+        return jsonify({"error": "Selected recipients were not found"}), 404
+    scope = "all employees and interns" if recipients is None else "selected recipients"
+    log_activity("Custom Notification Sent", title[:80])
+    return jsonify({
+        "message": f"Notification sent to {scope}",
+        **summary,
+    })
+
+
+@settings_bp.route("/api/notifications/sent", methods=["GET"])
+@admin_required
+def custom_notification_log():
+    """Recent admin-broadcast notifications, newest first."""
+    db = get_db()
+    if db is None:
+        return jsonify([])
+    from backend.db import serialize_doc
+
+    try:
+        limit = min(int(request.args.get("limit", 30)), 100)
+    except (TypeError, ValueError):
+        limit = 30
+    docs = list(
+        db.custom_notifications.find({}).sort("sent_at", -1).limit(limit)
+    )
+    return jsonify([serialize_doc(doc) for doc in docs])
 
 
 @settings_bp.route("/api/settings", methods=["GET"])
 def get_settings_route():
     settings = get_settings()
+    # Allocation of announcement senders is an admin list; it must not leak
+    # through the public settings bootstrap endpoint.
+    settings.pop("announcement_senders", None)
     return jsonify(settings)
 
 
@@ -107,7 +268,7 @@ def storage_stats():
         "database": config.db_name(),
         "total_size_bytes": total,
         "collections": collections,
-        "media": storage.status(),
+        "media": storage.status(detailed=True),
     })
 
 
@@ -135,6 +296,7 @@ def get_dashboard():
     total_interns = count_interns()
     task_counts_data = task_counts()
     attendance = today_summary(today)
+    remote_workers = count_remote_workers()
     birthdays = upcoming_birthdays(30)
     tasks = upcoming_tasks(8)
     activity = recent_activity(8)
@@ -145,9 +307,10 @@ def get_dashboard():
     return jsonify({
         "total_employees": active_employees,
         "total_interns": total_interns,
+        "total_workforce": active_employees + total_interns,
         "present_today": attendance.get("present", 0),
         "absent_today": attendance.get("absent", 0),
-        "remote_workers": attendance.get("remote", 0),
+        "remote_workers": remote_workers,
         "tasks_pending": task_counts_data.get("pending", 0),
         "tasks_completed": task_counts_data.get("completed", 0),
         "today_attendance": for_date(today)[:8],
@@ -170,8 +333,10 @@ def get_activity():
 @settings_bp.route("/api/announcements", methods=["GET"])
 def get_announcements():
     items = _announcement_items()
-    latest = items[0]["content"] if items else "Welcome to PSM Office!"
-    return jsonify({"announcement": latest, "announcements": items})
+    latest = items[0] if items else None
+    content = latest["content"] if latest else "Welcome to PSM Office!"
+    topic = latest.get("topic") if latest else ""
+    return jsonify({"announcement": content, "topic": topic, "announcements": items})
 
 
 def _announcement_items():
@@ -183,6 +348,7 @@ def _announcement_items():
     if note.get("content"):
         return [{
             "_id": "legacy",
+            "topic": "",
             "content": note.get("content"),
             "created_at": note.get("created_at"),
             "author_id": None,
@@ -223,6 +389,7 @@ def announcement_permission():
 @announcement_sender_required
 def save_announcement():
     data = request.get_json() or {}
+    topic = (data.get("topic", "") or "").strip()
     content = (data.get("content", "") or "").strip()
     if not content:
         return jsonify({"error": "Announcement content is required"}), 400
@@ -244,14 +411,33 @@ def save_announcement():
 
     saved = add_announcement(
         content,
+        topic=topic,
         author_id=person_id,
         author_type=person_type,
         author_name=author_name,
     )
     save_note(content)
-    _broadcast_announcement(content)
+    _broadcast_announcement(content, topic)
     log_activity("Announcement Published", content[:80])
     return jsonify({"message": "Announcement saved", "announcement": saved})
+
+
+@settings_bp.route("/api/announcements/<announcement_id>", methods=["DELETE"])
+@admin_required
+def delete_announcement_route(announcement_id):
+    if announcement_id == "legacy":
+        save_note("")
+        log_activity("Announcement Deleted", "legacy note")
+        return jsonify({"message": "Announcement deleted"})
+
+    if not delete_announcement(announcement_id):
+        return jsonify({"error": "Announcement not found"}), 404
+
+    # Keep the mobile home screen showing the newest one that remains.
+    remaining = list_announcements()
+    save_note(remaining[0]["content"] if remaining else "")
+    log_activity("Announcement Deleted", announcement_id)
+    return jsonify({"message": "Announcement deleted"})
 
 
 @settings_bp.route("/api/announcement-senders", methods=["GET"])

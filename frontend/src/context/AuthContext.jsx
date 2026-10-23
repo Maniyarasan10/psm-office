@@ -1,32 +1,53 @@
 import { createContext, useContext, useState } from 'react';
-import api, { AUTH_TOKEN_KEY } from '../services/services';
+import api from '../services/services';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('psm-admin');
-    return stored ? JSON.parse(stored) : null;
+    try {
+      const stored = localStorage.getItem('psm-admin');
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      // Clean up tokens persisted by older builds.
+      if (parsed && (parsed.token || parsed.refresh_token)) {
+        delete parsed.token;
+        delete parsed.refresh_token;
+        localStorage.setItem('psm-admin', JSON.stringify(parsed));
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
   });
 
   const login = async (username, password) => {
     const res = await api.post('/auth/admin-login', { username, password });
-    const userData = res.data;
-    const token = userData.token || '';
-    if (token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+    const userData = res.data || {};
+    // Token is now set as an HttpOnly cookie by the backend. Never persist it
+    // (or any refresh token) in localStorage; keep display metadata only.
+    const { token, refresh_token, ...safeUser } = userData;
+    setUser(safeUser);
+    try {
+      localStorage.setItem('psm-admin', JSON.stringify(safeUser));
+    } catch {
+      // ignore
     }
-    setUser(userData);
-    localStorage.setItem('psm-admin', JSON.stringify(userData));
-    return userData;
+    return safeUser;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // ignore
+    }
     setUser(null);
-    localStorage.removeItem('psm-admin');
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    try {
+      localStorage.removeItem('psm-admin');
+    } catch {
+      // ignore
+    }
   };
 
   return (

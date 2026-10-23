@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   getEmployees,
   getInterns,
   getAnnouncement,
   saveAnnouncement,
+  deleteAnnouncement,
   getAnnouncementSenders,
   updateAnnouncementSenders,
 } from '../services/services';
@@ -12,6 +13,8 @@ import {
   HiOutlineSpeakerphone,
   HiOutlineSearch,
   HiOutlineCheckCircle,
+  HiOutlineClock,
+  HiOutlineTrash,
 } from 'react-icons/hi';
 
 const personKey = (type, id) => `${type}:${id}`;
@@ -25,9 +28,13 @@ export default function Announcements() {
   const [savedMsg, setSavedMsg] = useState(null);
   const [search, setSearch] = useState('');
 
+  const [topic, setTopic] = useState('');
   const [content, setContent] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [publishMsg, setPublishMsg] = useState(null);
+
+  const [announcements, setAnnouncements] = useState([]);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     load();
@@ -47,6 +54,9 @@ export default function Announcements() {
         (sendersRes.data.senders || []).map((s) => personKey(s.person_type, s.person_id))
       );
       setSelected(keys);
+      const items = annRes.data.announcements || [];
+      setAnnouncements(items);
+      setTopic(items[0]?.topic || '');
       const existing = annRes.data.announcement || '';
       setContent(existing === 'Welcome to PSM Office!' ? '' : existing);
     } catch (err) {
@@ -55,6 +65,23 @@ export default function Announcements() {
       setLoading(false);
     }
   };
+
+  const loadAnnouncementLog = useCallback(async () => {
+    try {
+      const res = await getAnnouncement();
+      setAnnouncements(res.data.announcements || []);
+    } catch {
+      // Keep the current log; the next poll retries.
+    }
+  }, []);
+
+  // While this page stays open, pick up announcements published elsewhere.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void loadAnnouncementLog();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [loadAnnouncementLog]);
 
   const toggle = (key) => {
     setSelected((prev) => {
@@ -111,6 +138,11 @@ export default function Announcements() {
   };
 
   const handlePublish = async () => {
+    if (!topic.trim()) {
+      setPublishMsg({ type: 'error', text: 'Topic cannot be empty.' });
+      setTimeout(() => setPublishMsg(null), 4000);
+      return;
+    }
     if (!content.trim()) {
       setPublishMsg({ type: 'error', text: 'Announcement cannot be empty.' });
       setTimeout(() => setPublishMsg(null), 4000);
@@ -119,7 +151,9 @@ export default function Announcements() {
     setPublishing(true);
     setPublishMsg(null);
     try {
-      await saveAnnouncement({ content });
+      await saveAnnouncement({ topic, content });
+      const res = await getAnnouncement();
+      setAnnouncements(res.data.announcements || []);
       setPublishMsg({ type: 'success', text: 'Announcement published to everyone.' });
     } catch (err) {
       setPublishMsg({ type: 'error', text: err.response?.data?.error || 'Failed to publish announcement.' });
@@ -127,6 +161,31 @@ export default function Announcements() {
       setPublishing(false);
       setTimeout(() => setPublishMsg(null), 4000);
     }
+  };
+
+  const handleDelete = async (item) => {
+    if (!item?._id) return;
+    if (!window.confirm('Delete this announcement? This cannot be undone.')) return;
+    setDeletingId(item._id);
+    try {
+      await deleteAnnouncement(item._id);
+      const res = await getAnnouncement();
+      const items = res.data.announcements || [];
+      setAnnouncements(items);
+      setTopic(items[0]?.topic || '');
+      const latest = res.data.announcement || '';
+      setContent(latest === 'Welcome to PSM Office!' ? '' : latest);
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Failed to delete the announcement.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const formatAnnouncementDate = (value) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? '-' : parsed.toLocaleString();
   };
 
   const renderPerson = (type, id, name, subId) => {
@@ -255,6 +314,15 @@ export default function Announcements() {
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
             This message is shown on the mobile app home screen. Publishing notifies everyone.
           </p>
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label>Topic</label>
+            <input
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Announcement topic"
+              maxLength={120}
+            />
+          </div>
           <textarea
             className="note-area"
             value={content}
@@ -279,6 +347,56 @@ export default function Announcements() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="section-card" style={{ marginTop: 20 }}>
+        <h3>
+          <HiOutlineClock size={16} /> Announcement log
+        </h3>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
+          Every published announcement, newest first. Deleting one removes it from the log.
+        </p>
+        {announcements.length === 0 ? (
+          <div className="empty-state" style={{ padding: 20 }}>
+            No announcements yet.
+          </div>
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 220 }}>Topic</th>
+                  <th>Message</th>
+                  <th style={{ width: 160 }}>Sent by</th>
+                  <th style={{ width: 180 }}>Date</th>
+                  <th style={{ width: 80 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {announcements.map((item) => (
+                  <tr key={item._id}>
+                    <td><strong>{item.topic || '-'}</strong></td>
+                    <td style={{ whiteSpace: 'pre-wrap' }}>{item.content}</td>
+                    <td>{item.author_name || 'Administrator'}</td>
+                    <td>{formatAnnouncementDate(item.created_at)}</td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          className="btn btn-danger btn-icon btn-sm"
+                          onClick={() => handleDelete(item)}
+                          disabled={deletingId === item._id}
+                          title="Delete announcement"
+                        >
+                          <HiOutlineTrash size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -6,7 +6,16 @@ import {
   sendAnnouncement,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useRealtime } from '../context/RealtimeContext';
 import { Announcement } from '../types';
+import { readCache, writeCache } from '../services/offlineCache';
+
+const ANNOUNCEMENT_CACHE_KEY = 'announcements';
+
+interface AnnouncementCache {
+  announcement: string;
+  announcements: Announcement[];
+}
 
 export interface AnnouncementData {
   announcement: string;
@@ -19,7 +28,7 @@ export interface AnnouncementData {
   reload: () => void;
   refresh: () => void;
   syncPermission: () => void;
-  publish: (content: string) => Promise<{ ok: boolean; message?: string }>;
+  publish: (topic: string, content: string) => Promise<{ ok: boolean; message?: string }>;
 }
 
 export function useAnnouncement(): AnnouncementData {
@@ -37,7 +46,21 @@ export function useAnnouncement(): AnnouncementData {
 
   const requestId = useRef(0);
 
-  const run = useCallback(async (mode: 'initial' | 'refresh') => {
+  useEffect(() => {
+    let active = true;
+    void readCache<AnnouncementCache>(ANNOUNCEMENT_CACHE_KEY).then(cached => {
+      if (!active || !cached) return;
+      const cachedList = Array.isArray(cached.data.announcements) ? cached.data.announcements : [];
+      setAnnouncements(cachedList);
+      setAnnouncement(typeof cached.data.announcement === 'string' ? cached.data.announcement : '');
+      setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const run = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     const id = ++requestId.current;
     if (mode === 'refresh') setRefreshing(true);
 
@@ -55,8 +78,13 @@ export function useAnnouncement(): AnnouncementData {
         : typeof data.announcement === 'string' && data.announcement
           ? [{ _id: 'legacy', content: data.announcement, created_at: '' }]
           : [];
+      const latest = typeof data.announcement === 'string' ? data.announcement : '';
       setAnnouncements(list);
-      setAnnouncement(typeof data.announcement === 'string' ? data.announcement : '');
+      setAnnouncement(latest);
+      writeCache<AnnouncementCache>(ANNOUNCEMENT_CACHE_KEY, {
+        announcement: latest,
+        announcements: list,
+      });
       setError(false);
     } else {
       setError(true);
@@ -90,14 +118,18 @@ export function useAnnouncement(): AnnouncementData {
       .catch(() => {});
   }, [personId, personTypeValue]);
 
-  const publish = useCallback(async (content: string): Promise<{ ok: boolean; message?: string }> => {
+  const publish = useCallback(async (topic: string, content: string): Promise<{ ok: boolean; message?: string }> => {
+    const trimmedTopic = topic.trim();
     const trimmed = content.trim();
+    if (!trimmedTopic) {
+      return { ok: false, message: 'Topic cannot be empty.' };
+    }
     if (!trimmed) {
       return { ok: false, message: 'Announcement cannot be empty.' };
     }
     setSending(true);
     try {
-      const res = await sendAnnouncement(trimmed, personId || undefined, personTypeValue);
+      const res = await sendAnnouncement(trimmedTopic, trimmed, personId || undefined, personTypeValue);
       const created = res.data?.announcement;
       if (created && created._id) {
         setAnnouncements(prev => [created, ...prev.filter(item => item._id !== created._id)]);
@@ -114,6 +146,16 @@ export function useAnnouncement(): AnnouncementData {
       setSending(false);
     }
   }, [personId, personTypeValue]);
+
+  // The backend broadcasts this event after publishing, so a screen that is
+  // already open reloads itself instead of waiting for a manual pull.
+  const { subscribe } = useRealtime();
+  useEffect(
+    () => subscribe('announcement', () => {
+      void run('silent');
+    }),
+    [run, subscribe]
+  );
 
   useEffect(() => {
     void run('initial');

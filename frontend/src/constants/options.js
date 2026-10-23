@@ -5,7 +5,14 @@ export const DEPARTMENTS = [
   'HR',
   'Operations',
   'Marketing',
+  'Management',
+  'Development',
+  'R&D',
+  'Intern',
 ];
+
+// Where a person works from.
+export const WORK_MODES = ['On-site', 'Remote', 'Hybrid'];
 
 export const DESIGNATIONS_BY_DEPARTMENT = {
   Engineering: [
@@ -20,6 +27,12 @@ export const DESIGNATIONS_BY_DEPARTMENT = {
     'DevOps Engineer',
     'Data Engineer',
     'Engineering Manager',
+    'Developer',
+    'Software Lead',
+    'Java FullStack',
+    'Python Full Stack Developer',
+    'Software Developer',
+    'Data Analyst',
     'Intern',
   ],
   Design: [
@@ -47,6 +60,7 @@ export const DESIGNATIONS_BY_DEPARTMENT = {
     'Talent Acquisition Specialist',
     'People Operations',
     'HR Manager',
+    'Human Resources Manager',
     'Intern',
   ],
   Operations: [
@@ -66,6 +80,57 @@ export const DESIGNATIONS_BY_DEPARTMENT = {
     'Digital Marketing Specialist',
     'Brand Manager',
     'Marketing Manager',
+    'Market Analyst Engineer',
+    'Lead Gen Engineer',
+    'Intern',
+  ],
+  Management: [
+    'CTO',
+    'CEO',
+    'Project Manager',
+    'General Manager',
+    'Team Lead',
+    'Director',
+    'Consultant',
+    'Intern',
+  ],
+  Development: [
+    'Developer',
+    'Software Lead',
+    'Java FullStack',
+    'Python Full Stack Developer',
+    'Full Stack Developer',
+    'Software Developer',
+    'Data Analyst',
+    'Data Scientist',
+    'Gen AI & LLM Engineer',
+    'QA Engineer',
+    'DevOps Engineer',
+    'Team Lead',
+    'Intern',
+  ],
+  'R&D': [
+    'Research Analyst',
+    'Research & Product Analyst',
+    'Gen AI & LLM Engineer',
+    'Data Analyst',
+    'Data Scientist',
+    'AI & Software Development (Intern)',
+    'AI (Intern)',
+    'Python Web Developer (Intern)',
+    'Full Stack Developer',
+    'Software Developer',
+    'Intern',
+  ],
+  Intern: [
+    'AI & Software Development (Intern)',
+    'AI (Intern)',
+    'Python Web Developer (Intern)',
+    'Gen AI & LLM Engineer',
+    'Data Analyst',
+    'Data Scientist',
+    'Full Stack Developer',
+    'Software Developer',
     'Intern',
   ],
 };

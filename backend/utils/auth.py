@@ -18,6 +18,7 @@ from functools import wraps
 from flask import g, jsonify, request
 
 from backend import config
+from backend.utils import token_versions
 
 
 def _b64e(data: bytes) -> str:
@@ -44,7 +45,11 @@ def issue_token(subject, role, person_type=None, display_name=None, ttl=None, ex
         "iat": now,
         "exp": now + (config.token_ttl() if ttl is None else int(ttl)),
         "token_type": "access",
+        # Global + per-person revocation counters (see token_versions.py).
+        "ver": token_versions.get_version(None),
     }
+    if role != "admin":
+        payload["pv"] = token_versions.get_version(subject)
     if person_type:
         payload["person_type"] = person_type
     if display_name:
@@ -80,6 +85,16 @@ def verify_token(token, expected_type=None):
         return None
     if expected_type is not None and payload.get("token_type") != expected_type:
         return None
+    # Revoked tokens are rejected even when their signature and expiry are
+    # still valid.
+    try:
+        if int(payload.get("ver", 0)) != token_versions.get_version(None):
+            return None
+        if payload.get("role") != "admin":
+            if int(payload.get("pv", 0)) != token_versions.get_version(payload.get("sub")):
+                return None
+    except (TypeError, ValueError):
+        return None
     return payload
 
 
@@ -87,6 +102,13 @@ def _bearer_token():
     header = request.headers.get("Authorization", "")
     if header.lower().startswith("bearer "):
         return header[7:].strip()
+    # Web admin panel: the token is kept in an HttpOnly cookie so scripts
+    # (including a successful XSS payload) cannot read or exfiltrate it.
+    cookie_name = config.auth_cookie_name()
+    if cookie_name:
+        cookie_token = request.cookies.get(cookie_name)
+        if cookie_token:
+            return cookie_token.strip()
     return None
 
 

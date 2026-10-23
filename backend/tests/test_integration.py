@@ -142,6 +142,7 @@ class BackendIntegrationTests(unittest.TestCase):
                 ("POST", "/api/auth/set-password", None, 401),
                 ("GET", "/api/finance", {"Authorization": "Bearer bogus"}, 401),
             ]
+            self.client.delete_cookie("psm_access")
             for method, path, headers, expected in cases:
                 res = self.client.open(
                     path,
@@ -382,6 +383,7 @@ class BackendIntegrationTests(unittest.TestCase):
         )
 
         # Unauthenticated publishing is always rejected.
+        self.client.delete_cookie("psm_access")
         anon = self.client.post("/api/announcements", json={"content": "Anon"})
         self.assertEqual(anon.status_code, 401)
 
@@ -507,6 +509,7 @@ class BackendIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(denied.status_code, 403)
 
+            self.client.delete_cookie("psm_access")
             anon = self.client.post(f"/api/leave/{leave_id}/approve", json={})
             self.assertEqual(anon.status_code, 401)
         finally:
@@ -577,6 +580,7 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertTrue(updated["read"])
 
     def test_notifications_anonymous_empty(self):
+        self.client.delete_cookie("psm_access")
         res = self.client.get("/api/notifications")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json()["notifications"], [])
