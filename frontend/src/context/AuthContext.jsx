@@ -24,9 +24,12 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const res = await api.post('/auth/admin-login', { username, password });
     const userData = res.data || {};
-    // Token is now set as an HttpOnly cookie by the backend. Never persist it
-    // (or any refresh token) in localStorage; keep display metadata only.
+    // Token is set as an HttpOnly cookie by the backend. Also attach it as a
+    // Bearer header so requests survive cookie/proxy issues (Netlify -> Heroku).
     const { token, refresh_token, ...safeUser } = userData;
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
     setUser(safeUser);
     try {
       localStorage.setItem('psm-admin', JSON.stringify(safeUser));
@@ -42,6 +45,7 @@ export function AuthProvider({ children }) {
     } catch {
       // ignore
     }
+    delete api.defaults.headers.common['Authorization'];
     setUser(null);
     try {
       localStorage.removeItem('psm-admin');
