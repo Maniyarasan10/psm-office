@@ -11,7 +11,6 @@ import {
   HiOutlineRefresh,
   HiOutlineCheck,
   HiOutlineX,
-  HiOutlineClock,
   HiOutlineChat,
   HiOutlineInformationCircle,
 } from 'react-icons/hi';
@@ -30,7 +29,7 @@ const STATUS_LABELS = {
 
 const STATUS_BADGES = {
   open: 'badge-open',
-  in_progress: 'badge-in-progress',
+  in_progress: 'badge-progress',
   waiting: 'badge-waiting',
   resolved: 'badge-resolved',
   closed: 'badge-closed',
@@ -172,293 +171,304 @@ export default function Support() {
   }, [requests]);
 
   return (
-    <div className="support-page">
+    <div>
       <div className="page-header">
-        <h1>Support Requests</h1>
-        <p>Complaints and help-desk tickets raised from the mobile app.</p>
+        <div className="page-header-left">
+          <h2>Support Tickets</h2>
+          <p>Complaints and help-desk tickets raised from the mobile app.</p>
+        </div>
+        <div className="page-header-right">
+          <button className="btn btn-secondary" onClick={load} disabled={loading}>
+            <HiOutlineRefresh size={16} /> Refresh
+          </button>
+        </div>
       </div>
 
-      {message && (
-        <div className={`flash flash-${message.type}`}>{message.text}</div>
-      )}
+      <div className="stat-grid">
+        {STATUS_ORDER.map((s) => (
+          <div key={s} className="stat-card info">
+            <div className="stat-number">{stats[s] ?? 0}</div>
+            <div className="stat-label">{STATUS_LABELS[s] || s}</div>
+          </div>
+        ))}
+      </div>
 
-      <div className="toolbar">
-        <div className="filter-group">
-          <label>Status</label>
+      <div className="filter-bar">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="select"
+            style={{
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-input)',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
           >
-            <option value="all">All Statuses</option>
+            <option value="all">All Status</option>
             {STATUS_ORDER.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABELS[s] || s}
-              </option>
+              <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
             ))}
           </select>
-        </div>
-        <div className="filter-group">
-          <label>Category</label>
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="select"
+            style={{
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-input)',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
           >
             <option value="all">All Categories</option>
             {categoryList.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-        </div>
-        <div className="filter-group search">
-          <label>Search</label>
           <input
             type="text"
-            placeholder="Ticket number, subject, person..."
+            placeholder="Search ticket number, subject, person..."
+            className="filter-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input"
           />
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={load}
-          disabled={loading}
+      </div>
+
+      {message && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: '10px 14px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            background: message.type === 'success' ? 'var(--success-light)' : 'var(--danger-light)',
+            color: message.type === 'success' ? 'var(--success)' : 'var(--danger)',
+          }}
         >
-          {loading ? 'Loading...' : 'Refresh'}
-        </button>
-      </div>
+          {message.text}
+        </div>
+      )}
 
-      <div className="stats-row">
-        {STATUS_ORDER.map((s) => (
-          <div key={s} className="stat-card">
-            <div className="stat-label">{STATUS_LABELS[s] || s}</div>
-            <div className="stat-value">{stats[s] ?? 0}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Ticket #</th>
-              <th>Raised By</th>
-              <th>Subject</th>
-              <th>Category</th>
-              <th>Priority</th>
-              <th>Status</th>
-              <th>Updated</th>
-              <th className="actions">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
+      <div className="card">
+        <div className="table-container">
+          <table>
+            <thead>
               <tr>
-                <td colSpan={8} className="empty-state">
-                  No support requests found.
-                </td>
+                <th>Ticket #</th>
+                <th>Raised By</th>
+                <th>Subject</th>
+                <th>Category</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              filtered.map((r) => {
-                const isBusy = actionId === r._id && actionType === 'status';
-                const isPriBusy = actionId === r._id && actionType === 'priority';
-                const currentStatus = r.status || 'open';
-                const nextStatus =
-                  currentStatus === 'open' ? 'in_progress' :
-                  currentStatus === 'in_progress' ? 'waiting' :
-                  currentStatus === 'waiting' ? 'resolved' :
-                  'open';
-                return (
-                  <tr key={r._id}>
-                    <td>
-                      <div className="ticket-number">{r.ticket_number || '-'}</div>
-                    </td>
-                    <td>{r.person_label || '-'}</td>
-                    <td>{r.subject || '-'}</td>
-                    <td>{r.category || '-'}</td>
-                    <td>
-                      <span className={`priority priority-${r.priority || 'medium'}`}>
-                        {PRIORITY_LABELS[r.priority || 'medium']}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${STATUS_BADGES[currentStatus] || ''}`}>
-                        {STATUS_LABELS[currentStatus] || currentStatus}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="muted small">{r.updated_at || r.created_at || '-'}</div>
-                    </td>
-                    <td className="actions">
-                      <div className="action-buttons">
-                        <button
-                          className="btn btn-sm btn-outline"
-                          disabled={isBusy}
-                          onClick={() => openTicket(r._id)}
-                        >
-                          {isBusy ? '...' : 'View'}
-                        </button>
-                        <button
-                          className="btn btn-sm"
-                          disabled={isBusy}
-                          onClick={() => handleStatusChange(r._id, nextStatus)}
-                        >
-                          {isBusy ? '...' : `Set ${STATUS_LABELS[nextStatus] || nextStatus}`}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="8" className="empty-state">Loading...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan="8" className="empty-state">No support requests found.</td></tr>
+              ) : (
+                filtered.map((r) => {
+                  const isBusy = actionId === r._id && actionType === 'status';
+                  const isPriBusy = actionId === r._id && actionType === 'priority';
+                  const currentStatus = r.status || 'open';
+                  const nextStatus =
+                    currentStatus === 'open' ? 'in_progress' :
+                    currentStatus === 'in_progress' ? 'waiting' :
+                    currentStatus === 'waiting' ? 'resolved' :
+                    'open';
+                  return (
+                    <tr key={r._id}>
+                      <td>
+                        <div className="ticket-number">{r.ticket_number || '-'}</div>
+                      </td>
+                      <td>{r.person_label || '-'}</td>
+                      <td>{r.subject || '-'}</td>
+                      <td>{r.category || '-'}</td>
+                      <td>
+                        <span className={`badge badge-${r.priority === 'high' ? 'high' : r.priority === 'low' ? 'low' : 'medium'}`}>
+                          {PRIORITY_LABELS[r.priority || 'medium']}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${STATUS_BADGES[currentStatus] || ''}`}>
+                          {STATUS_LABELS[currentStatus] || currentStatus}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                          {r.updated_at || r.created_at || '-'}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            className="btn btn-sm btn-outline"
+                            disabled={isBusy}
+                            onClick={() => openTicket(r._id)}
+                          >
+                            {isBusy ? '...' : 'View'}
+                          </button>
+                          <button
+                            className="btn btn-sm"
+                            disabled={isBusy}
+                            onClick={() => handleStatusChange(r._id, nextStatus)}
+                          >
+                            {isBusy ? '...' : `Set ${STATUS_LABELS[nextStatus] || nextStatus}`}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {selectedTicket && (
-        <div className="detail-panel">
-          <div className="detail-header">
-            <h2>
-              {selectedTicket.ticket_number}
-              {selectedTicket.priority === 'high' && (
-                <span className="priority-pill">High Priority</span>
-              )}
-            </h2>
-            <button className="btn btn-sm btn-outline" onClick={closeDetail}>
-              <HiOutlineX size={16} /> Close
-            </button>
-          </div>
-
-          <div className="detail-grid">
-            <div className="detail-field">
-              <label>Subject</label>
-              <div className="detail-value">{selectedTicket.subject || '-'}</div>
+        <div className="modal-overlay" onClick={() => closeDetail()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
+            <div className="modal-header">
+              <h3>
+                {selectedTicket.ticket_number}
+                {selectedTicket.priority === 'high' && (
+                  <span className="badge badge-high" style={{ marginLeft: 10, fontSize: 11 }}>High Priority</span>
+                )}
+              </h3>
+              <button className="modal-close" onClick={closeDetail}>&times;</button>
             </div>
-            <div className="detail-field">
-              <label>Category</label>
-              <div className="detail-value">{selectedTicket.category || '-'}</div>
-            </div>
-            <div className="detail-field">
-              <label>Priority</label>
-              <div className="detail-value">
-                <span className={`priority priority-${selectedTicket.priority || 'medium'}`}>
-                  {PRIORITY_LABELS[selectedTicket.priority || 'medium']}
-                </span>
-              </div>
-            </div>
-            <div className="detail-field">
-              <label>Status</label>
-              <div className="detail-value">
-                <span
-                  className={`badge ${STATUS_BADGES[selectedTicket.status || 'open'] || ''}`}
-                >
-                  {STATUS_LABELS[selectedTicket.status || 'open'] || selectedTicket.status}
-                </span>
-              </div>
-            </div>
-            <div className="detail-field">
-              <label>Raised By</label>
-              <div className="detail-value">
-                {selectedTicket.person_label || '-'}
-                {selectedTicket.id_label ? ` (${selectedTicket.id_label})` : ''}
-              </div>
-            </div>
-            <div className="detail-field">
-              <label>Created</label>
-              <div className="detail-value muted small">
-                {selectedTicket.created_at || '-'}
-              </div>
-            </div>
-            <div className="detail-field">
-              <label>Last Updated</label>
-              <div className="detail-value muted small">
-                {selectedTicket.updated_at || '-'}
-              </div>
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <h3>Description</h3>
-            <div className="detail-value description">
-              {selectedTicket.description || '-'}
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <h3>Change Status</h3>
-            <div className="status-actions">
-              {STATUS_ORDER.map((s) => {
-                const disabled =
-                  selectedTicket.status === s || actionId === selectedTicket._id;
-                return (
-                  <button
-                    key={s}
-                    className={`btn btn-sm ${selectedTicket.status === s ? 'btn-active' : 'btn-outline'}`}
-                    disabled={disabled}
-                    onClick={() => handleStatusChange(selectedTicket._id, s)}
-                  >
-                    {STATUS_LABELS[s] || s}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <h3>Change Priority</h3>
-            <div className="priority-actions">
-              {['low', 'medium', 'high'].map((p) => (
-                <button
-                  key={p}
-                  className={`btn btn-sm ${selectedTicket.priority === p ? 'btn-active' : 'btn-outline'}`}
-                  disabled={actionId === selectedTicket._id}
-                  onClick={() => handlePriorityChange(selectedTicket._id, p)}
-                >
-                  {PRIORITY_LABELS[p]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="detail-section">
-            <h3>Add Response</h3>
-            <form onSubmit={handleSendResponse} className="reply-form">
-              <textarea
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                placeholder="Type your response..."
-                rows={4}
-                className="textarea"
-                disabled={replying}
-              />
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={replying || !replyBody.trim()}
-              >
-                {replying ? 'Sending...' : 'Send Response'}
-              </button>
-            </form>
-          </div>
-
-          {selectedTicket.comments && selectedTicket.comments.length > 0 && (
-            <div className="detail-section">
-              <h3>Conversation</h3>
-              <div className="conversation">
-                {selectedTicket.comments.map((c, i) => (
-                  <div key={i} className={`comment ${c.author_type === 'support' ? 'comment-support' : 'comment-employee'}`}>
-                    <div className="comment-header">
-                      <strong>{c.author || (c.author_type === 'support' ? 'Support Team' : selectedTicket.person_label)}</strong>
-                      <span className="muted small">{c.created_at || ''}</span>
-                    </div>
-                    <div className="comment-body">{c.body}</div>
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Subject</label>
+                  <div style={{ fontWeight: 600 }}>{selectedTicket.subject || '-'}</div>
+                </div>
+                <div className="form-group">
+                  <label>Category</label>
+                  <div>{selectedTicket.category || '-'}</div>
+                </div>
+                <div className="form-group">
+                  <label>Priority</label>
+                  <div>
+                    <span className={`badge badge-${selectedTicket.priority === 'high' ? 'high' : selectedTicket.priority === 'low' ? 'low' : 'medium'}`}>
+                      {PRIORITY_LABELS[selectedTicket.priority || 'medium']}
+                    </span>
                   </div>
-                ))}
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <div>
+                    <span className={`badge ${STATUS_BADGES[selectedTicket.status || 'open'] || ''}`}>
+                      {STATUS_LABELS[selectedTicket.status || 'open'] || selectedTicket.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Raised By</label>
+                  <div>
+                    {selectedTicket.person_label || '-'}
+                    {selectedTicket.id_label ? ` (${selectedTicket.id_label})` : ''}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Created</label>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{selectedTicket.created_at || '-'}</div>
+                </div>
+                <div className="form-group">
+                  <label>Last Updated</label>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{selectedTicket.updated_at || '-'}</div>
+                </div>
               </div>
+
+              <div className="section-card" style={{ marginTop: 20 }}>
+                <h3>Change Status</h3>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {STATUS_ORDER.map((s) => {
+                    const disabled =
+                      selectedTicket.status === s || actionId === selectedTicket._id;
+                    return (
+                      <button
+                        key={s}
+                        className={`btn btn-sm ${selectedTicket.status === s ? 'btn-primary' : 'btn-secondary'}`}
+                        disabled={disabled}
+                        onClick={() => handleStatusChange(selectedTicket._id, s)}
+                      >
+                        {STATUS_LABELS[s] || s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="section-card" style={{ marginTop: 20 }}>
+                <h3>Change Priority</h3>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {['low', 'medium', 'high'].map((p) => (
+                    <button
+                      key={p}
+                      className={`btn btn-sm ${selectedTicket.priority === p ? 'btn-primary' : 'btn-secondary'}`}
+                      disabled={actionId === selectedTicket._id}
+                      onClick={() => handlePriorityChange(selectedTicket._id, p)}
+                    >
+                      {PRIORITY_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="section-card" style={{ marginTop: 20 }}>
+                <h3>Add Response</h3>
+                <form onSubmit={handleSendResponse} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <textarea
+                    value={replyBody}
+                    onChange={(e) => setReplyBody(e.target.value)}
+                    placeholder="Type your response..."
+                    rows={4}
+                    className="note-area"
+                    disabled={replying}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={replying || !replyBody.trim()}
+                  >
+                    {replying ? 'Sending...' : 'Send Response'}
+                  </button>
+                </form>
+              </div>
+
+              {selectedTicket.comments && selectedTicket.comments.length > 0 && (
+                <div className="section-card" style={{ marginTop: 20 }}>
+                  <h3>Conversation</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+                    {selectedTicket.comments.map((c, i) => (
+                      <div key={i} style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, background: c.author_type === 'support' ? 'var(--info-light)' : 'var(--bg-input)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, marginBottom: 6 }}>
+                          <strong style={{ fontSize: 13 }}>
+                            {c.author || (c.author_type === 'support' ? 'Support Team' : selectedTicket.person_label)}
+                          </strong>
+                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{c.created_at || ''}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{c.body}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>

@@ -830,6 +830,15 @@ tr:hover {
 .badge-progress { background: var(--info-light); color: var(--info); }
 .badge-completed { background: var(--success-light); color: var(--success); }
 
+/* Support ticket status badges */
+.badge-open { background: var(--info-light); color: var(--info); }
+.badge-waiting { background: var(--warning-light); color: var(--warning); }
+.badge-resolved { background: var(--success-light); color: var(--success); }
+.badge-closed { background: var(--danger-light); color: var(--danger); }
+.badge-cancelled { background: var(--bg-tertiary); color: var(--text-secondary); }
+.badge-rejected { background: var(--danger-light); color: var(--danger); }
+
+
 .modal-overlay {
   position: fixed;
   top: 0;
