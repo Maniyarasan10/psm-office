@@ -112,7 +112,7 @@ def create_app():
     config.assert_valid_config()
 
     origins = config.cors_origins()
-    CORS(app, origins=origins, supports_credentials=False)
+    CORS(app, origins=origins, supports_credentials=True)
 
     app.config["SECRET_KEY"] = config.session_secret()
     app.config["MAX_CONTENT_LENGTH"] = config.max_content_length()
