@@ -22,6 +22,18 @@ export default function Attendance() {
   const [exportLoading, setExportLoading] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
+  const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+  const displayName = (person) => {
+    const name = person.name || '';
+    // If the name field literally holds a MongoDB ObjectId, fall back to the
+    # employee/intern ID so a raw ObjectId never shows in the UI.
+    if (OBJECT_ID_RE.test(name.trim())) {
+      return person.employee_id || person.name || 'Unknown';
+    }
+    return name || person.employee_id || 'Unknown';
+  };
+
   useEffect(() => {
     loadAttendance();
   }, [selectedDate]);
@@ -99,8 +111,8 @@ export default function Attendance() {
 
   const exportCSV = () => {
     const headers = ['Name', 'Type', 'Clock In', 'Clock Out', 'Hours', 'Status', 'Lat', 'Lng'];
-    const rows = roster.map(r => [
-      r.name, r.person_type, r.clock_in || '', r.clock_out || '',
+      const rows = roster.map(r => [
+        displayName(r), r.person_type, r.clock_in || '', r.clock_out || '',
       r.working_hours || '', r.status, r.latitude || '', r.longitude || '',
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
@@ -136,8 +148,8 @@ export default function Attendance() {
 
   const exportFilteredCSV = () => {
     const headers = ['Name', 'Type', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Status', 'Lat', 'Lng'];
-    const rows = exportData.map(r => [
-      r.name || '', r.person_type || '', r.date || '', r.clock_in || '', r.clock_out || '',
+      const rows = exportData.map(r => [
+        displayName(r) || '', r.person_type || '', r.date || '', r.clock_in || '', r.clock_out || '',
       r.working_hours || '', r.status || '', r.latitude || '', r.longitude || '',
     ]);
 
@@ -267,7 +279,7 @@ export default function Attendance() {
                   <tr key={idx}>
                     <td>
                       <div className="avatar-sm">
-                        <img src={profilePhotoUrl(person.profile_photo_path)} alt="" className="avatar-img" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.className = 'avatar-sm avatar-fallback'; e.target.parentElement.textContent = person.name?.charAt(0)?.toUpperCase() || '?'; }} />
+                        <img src={profilePhotoUrl(person.profile_photo_path)} alt="" className="avatar-img" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.className = 'avatar-sm avatar-fallback';                         e.target.parentElement.textContent = displayName(person)?.charAt(0)?.toUpperCase() || '?'; }} />
                       </div>
                     </td>
                     <td>
@@ -276,7 +288,7 @@ export default function Attendance() {
                         style={{ cursor: 'pointer', color: 'var(--accent)' }}
                         title="Click to view attendance summary"
                       >
-                        {person.name}
+                        {displayName(person)}
                       </strong>
                     </td>
                     <td>
@@ -376,7 +388,7 @@ export default function Attendance() {
         <div className="modal-overlay" onClick={() => setSummaryModal(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
-              <h3>Attendance Summary - {summaryModal.name}</h3>
+              <h3>Attendance Summary - {displayName(summaryModal)}</h3>
               <button className="modal-close" onClick={() => setSummaryModal(null)}>&times;</button>
             </div>
             <div className="modal-body">
@@ -499,7 +511,7 @@ export default function Attendance() {
                     <tbody>
                       {exportData.map((r, i) => (
                         <tr key={i} style={{ borderTop: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '6px 10px' }}>{r.name}</td>
+                          <td style={{ padding: '6px 10px' }}>{displayName(r)}</td>
                           <td style={{ padding: '6px 10px' }}>{r.date}</td>
                           <td style={{ padding: '6px 10px' }}>{r.clock_in || '-'}</td>
                           <td style={{ padding: '6px 10px' }}>{r.clock_out || '-'}</td>

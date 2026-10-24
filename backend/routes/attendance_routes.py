@@ -51,10 +51,11 @@ def _build_roster(target_date):
             continue
         key = ("employee", emp["_id"])
         att = existing_map.get(key, {})
+        name = emp.get("name") or emp.get("employee_id") or "Unknown"
         roster.append({
             "person_type": "employee",
             "person_id": emp["_id"],
-            "name": emp.get("name", ""),
+            "name": name,
             "employee_id": emp.get("employee_id", ""),
             "clock_in": att.get("clock_in"),
             "clock_out": att.get("clock_out"),
@@ -70,10 +71,11 @@ def _build_roster(target_date):
     for intern in interns:
         key = ("intern", intern["_id"])
         att = existing_map.get(key, {})
+        name = intern.get("name") or intern.get("intern_id") or "Unknown"
         roster.append({
             "person_type": "intern",
             "person_id": intern["_id"],
-            "name": intern.get("name", ""),
+            "name": name,
             "employee_id": intern.get("intern_id", ""),
             "clock_in": att.get("clock_in"),
             "clock_out": att.get("clock_out"),
