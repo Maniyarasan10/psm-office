@@ -55,7 +55,7 @@ function toEmployee(person: {
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<EditProfileNav>();
-  const { employee, personType, login } = useAuth();
+  const { employee, personType, updateEmployee } = useAuth();
   const personId = employee?._id ?? '';
   const personTypeValue = (employee?.person_type ?? personType) as 'employee' | 'intern';
 
@@ -138,7 +138,14 @@ export default function EditProfileScreen() {
         return;
       }
       if (result.updated) {
-        await login(toEmployee(result.updated));
+        await updateEmployee({
+          name: result.updated.name,
+          phone: result.updated.phone,
+          email: result.updated.email,
+          photo_path: result.updated.photoPath,
+          person_type: result.updated.person_type,
+          _id: result.updated._id,
+        } as Partial<Employee>);
       }
       navigation.goBack();
     } catch (err) {
@@ -146,7 +153,7 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
-  }, [validate, save, name, phone, email, photo, login, navigation, saving]);
+  }, [validate, save, name, phone, email, photo, updateEmployee, navigation, saving]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>

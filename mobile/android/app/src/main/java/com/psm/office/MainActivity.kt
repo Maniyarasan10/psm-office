@@ -3,8 +3,6 @@ package com.psm.office
 import android.os.Build
 import android.os.Bundle
 
-import androidx.core.view.WindowCompat
-
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -19,13 +17,6 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
-    // Edge-to-edge: let the app draw behind the system bars so the blue
-    // welcome card reaches the very top (camera notch area) without the
-    // grey scrim that windowTranslucentStatus adds on modern Android.
-    WindowCompat.setDecorFitsSystemWindows(window, false)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      window.isNavigationBarContrastEnforced = false
-    }
   }
 
   /**

@@ -21,6 +21,7 @@ import {
   HiOutlineMoon,
   HiOutlineMenu,
   HiOutlineLogout,
+  HiOutlineChat,
 } from 'react-icons/hi';
 
 const navItems = [
@@ -36,6 +37,7 @@ const navItems = [
   { to: '/reports', label: 'Reports', icon: HiOutlineChartBar },
   { to: '/announcements', label: 'Announcements', icon: HiOutlineSpeakerphone },
   { to: '/notifications', label: 'Notifications', icon: HiOutlineBell },
+  { to: '/support', label: 'Support Tickets', icon: HiOutlineChat },
   { to: '/settings', label: 'Settings', icon: HiOutlineCog },
 ];
 
@@ -76,6 +78,7 @@ const pageTitles = {
   '/reports': { title: 'Reports', subtitle: 'Generate and export office reports.' },
   '/announcements': { title: 'Announcements', subtitle: 'Manage who can send announcements and publish updates.' },
   '/notifications': { title: 'Custom Notifications', subtitle: 'Send a notification to everyone or select specific employees and interns.' },
+  '/support': { title: 'Support Tickets', subtitle: 'View and manage help-desk complaints raised from the mobile app.' },
   '/settings': { title: 'Settings', subtitle: 'Configure company and app settings.' },
 };
 

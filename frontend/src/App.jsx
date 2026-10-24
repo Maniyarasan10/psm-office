@@ -17,6 +17,7 @@ import Reports from './pages/Reports';
 import Announcements from './pages/Announcements';
 import Notifications from './pages/Notifications';
 import Settings from './pages/Settings';
+import Support from './pages/Support';
 
 function AppRoutes() {
   return (
@@ -35,6 +36,7 @@ function AppRoutes() {
         <Route path="reports" element={<Reports />} />
         <Route path="announcements" element={<Announcements />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="support" element={<Support />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

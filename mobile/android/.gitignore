@@ -13,8 +13,3 @@ local.properties
 
 # Bundle artifacts
 *.jsbundle
-
-# Signing material (NEVER commit)
-*.keystore
-*.p12
-keystore.properties

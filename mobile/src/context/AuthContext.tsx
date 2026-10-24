@@ -2,13 +2,14 @@ import React, { createContext, useState, useEffect, useContext, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Employee } from '../types';
 import { RECENT_SEARCHES_STORAGE_KEY } from '../hooks/useRecentSearches';
-import { setAuthToken, clearAuthToken, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY, setOnAuthFailure } from '../services/api';
+import { setAuthToken, clearAuthToken, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY, setOnAuthFailure, getAuthToken } from '../services/api';
 import { clearOfflineCache } from '../services/offlineCache';
 
 interface AuthContextType {
   employee: Employee | null;
   personType: string;
   login: (empData: Employee) => Promise<void>;
+  updateEmployee: (patch: Partial<Employee>) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
 }
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   employee: null,
   personType: 'employee',
   login: async () => {},
+  updateEmployee: async () => {},
   logout: async () => {},
   loading: true,
 });
@@ -97,23 +99,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (empData: Employee) => {
     try {
       const clean = sanitizeEmployee(empData);
-      const token = empData.token || null;
-      const refreshToken = empData.refresh_token || null;
+      let token = empData.token || null;
+      let refreshToken = empData.refresh_token || null;
+
+      if (!token) {
+        try {
+          token = await getAuthToken();
+        } catch {
+          token = null;
+        }
+      }
+      if (!refreshToken) {
+        try {
+          refreshToken = await AsyncStorage.getItem(AUTH_REFRESH_TOKEN_KEY);
+        } catch {
+          refreshToken = null;
+        }
+      }
+
       setEmployee(clean);
       setAuthToken(token);
       await AsyncStorage.setItem(EMPLOYEE_STORAGE_KEY, JSON.stringify(clean));
       if (token) {
         await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
-      } else {
-        await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
       }
       if (refreshToken) {
         await AsyncStorage.setItem(AUTH_REFRESH_TOKEN_KEY, refreshToken);
-      } else {
-        await AsyncStorage.removeItem(AUTH_REFRESH_TOKEN_KEY);
       }
     } catch (err) {
       console.error('Failed to save auth:', err);
+    }
+  };
+
+  // Merge a server-confirmed profile update into the signed-in employee without
+  // touching the stored session tokens. Used by self-service profile edits.
+  const updateEmployee = async (patch: Partial<Employee>) => {
+    try {
+      setEmployee(current => {
+        if (!current) return current;
+        const next = sanitizeEmployee({ ...current, ...patch });
+        void AsyncStorage.setItem(EMPLOYEE_STORAGE_KEY, JSON.stringify(next)).catch(err => {
+          console.error('Failed to persist profile update:', err);
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to update employee:', err);
     }
   };
 
@@ -131,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const personType = employee?.person_type || 'employee';
 
   return (
-    <AuthContext.Provider value={{ employee, personType, login, logout, loading }}>
+    <AuthContext.Provider value={{ employee, personType, login, updateEmployee, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -268,12 +268,15 @@ class BackendIntegrationTests(unittest.TestCase):
         self.assertIn("token", data)
         self.assertIn("refresh_token", data)
 
-        # Admin login keeps the legacy single-token shape.
+        # Admin login now also mints a refresh token (cookie + body) so the web
+        # panel can silently refresh the session without re-entering credentials.
         admin = self.client.post(
             "/api/auth/admin-login",
             json={"username": ADMIN_USER, "password": ADMIN_PASS},
         ).get_json()
-        self.assertNotIn("refresh_token", admin)
+        self.assertIn("token", admin)
+        self.assertIn("refresh_token", admin)
+        self.assertEqual(admin["role"], "admin")
 
         # Exchanging the refresh token yields a fresh access token pair.
         exchange = self.client.post(

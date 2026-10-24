@@ -72,6 +72,12 @@ def admin_login():
         return jsonify({"error": "Invalid admin credentials"}), 401
 
     token = issue_token("admin", "admin", display_name=admin_user)
+    refresh = issue_token(
+        "admin", "admin",
+        display_name=admin_user,
+        ttl=config.refresh_token_ttl(),
+        extra={"token_type": "refresh"},
+    )
     response = jsonify({
         "_id": "admin",
         "username": admin_user,
@@ -79,13 +85,23 @@ def admin_login():
         "role": "admin",
         "photo_path": os.getenv("ADMIN_PHOTO_PATH", "/fin.png"),
         "token": token,
+        "refresh_token": refresh,
     })
-    # Browser admin panel authenticates with this HttpOnly cookie; the token
-    # in the JSON body remains for backwards-compatible non-browser clients.
+    # Browser admin panel authenticates with these HttpOnly cookies; the tokens
+    # in the JSON body remain for backwards-compatible non-browser clients.
     response.set_cookie(
         config.auth_cookie_name(),
         token,
         max_age=config.token_ttl(),
+        httponly=True,
+        secure=config.auth_cookie_secure(),
+        samesite=config.auth_cookie_samesite(),
+        path="/",
+    )
+    response.set_cookie(
+        "psm_refresh",
+        refresh,
+        max_age=config.refresh_token_ttl(),
         httponly=True,
         secure=config.auth_cookie_secure(),
         samesite=config.auth_cookie_samesite(),
@@ -158,6 +174,10 @@ def refresh_token():
     """
     data = request.get_json() or {}
     token = (data.get("refresh_token") or "").strip()
+    if not token:
+        # Web admin panel: the refresh token is kept in an HttpOnly cookie so
+        # scripts cannot read it; the browser sends it automatically.
+        token = (request.cookies.get("psm_refresh") or "").strip()
     payload = verify_token(token)
     if not payload:
         return jsonify({"error": "Invalid or expired refresh token"}), 401
@@ -169,11 +189,45 @@ def refresh_token():
     role = payload.get("role", "user")
     person_type = payload.get("person_type")
     display_name = payload.get("name")
-    access, refresh = _person_tokens(payload["sub"], person_type, display_name)
-    response = {"token": access, "refresh_token": refresh, "role": role}
+    if role == "admin":
+        access = issue_token("admin", "admin", display_name=display_name)
+        refresh = issue_token(
+            "admin", "admin",
+            display_name=display_name,
+            ttl=config.refresh_token_ttl(),
+            extra={"token_type": "refresh"},
+        )
+    else:
+        access, refresh = _person_tokens(payload["sub"], person_type, display_name)
+
+    body = {"token": access, "refresh_token": refresh, "role": role}
     if person_type:
-        response["person_type"] = person_type
-    return jsonify(response)
+        body["person_type"] = person_type
+
+    # Web admin panel: rotate both HttpOnly cookies so the silent refresh
+    # keeps the session alive without re-entering credentials.
+    came_from_cookie = not (data.get("refresh_token") or "").strip()
+    response = jsonify(body)
+    if came_from_cookie:
+        response.set_cookie(
+            config.auth_cookie_name(),
+            access,
+            max_age=config.token_ttl(),
+            httponly=True,
+            secure=config.auth_cookie_secure(),
+            samesite=config.auth_cookie_samesite(),
+            path="/",
+        )
+        response.set_cookie(
+            "psm_refresh",
+            refresh,
+            max_age=config.refresh_token_ttl(),
+            httponly=True,
+            secure=config.auth_cookie_secure(),
+            samesite=config.auth_cookie_samesite(),
+            path="/",
+        )
+    return response
 
 
 @auth_bp.route("/api/auth/change-password", methods=["POST"])

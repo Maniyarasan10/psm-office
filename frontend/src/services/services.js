@@ -9,11 +9,71 @@ const api = axios.create({
   withCredentials: true,
 });
 
+import axios from 'axios';
+import API_BASE from './api';
+
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
+  // Send/receive the HttpOnly auth cookie set by the backend.
+  withCredentials: true,
+});
+
+let isRefreshing = false;
+let refreshPromise = null;
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const { response, config } = error;
     const isLoginRequest = config?.url?.includes('/auth/admin-login');
+    const isRefreshRequest = config?.url?.includes('/auth/refresh-token');
+
+    // Never refresh on login or refresh-endpoint requests themselves.
+    if (response?.status === 401 && !isLoginRequest && !isRefreshRequest) {
+      // If a refresh is already in flight, wait for it and retry once.
+      if (isRefreshing) {
+        if (!refreshPromise) return Promise.reject(error);
+        try {
+          await refreshPromise;
+          config.headers.Authorization = undefined;
+          return api.request(config);
+        } catch {
+          return Promise.reject(error);
+        }
+      }
+
+      isRefreshing = true;
+      refreshPromise = (async () => {
+        try {
+          // The browser sends the HttpOnly psm_refresh cookie automatically;
+          // the backend mints a new access token and sets it as a cookie.
+          await api.post('/api/auth/refresh-token');
+        } finally {
+          isRefreshing = false;
+          refreshPromise = null;
+        }
+      })();
+
+      try {
+        await refreshPromise;
+        config.headers.Authorization = undefined;
+        return api.request(config);
+      } catch {
+        // Refresh failed: clear session and send to login.
+        try {
+          localStorage.removeItem('psm-admin');
+        } catch {
+          // ignore
+        }
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.assign('/login');
+        }
+        return Promise.reject(error);
+      }
+    }
+
     if (response?.status === 401 && !isLoginRequest) {
       try {
         localStorage.removeItem('psm-admin');
@@ -203,6 +263,23 @@ export const saveNote = (data) =>
 
 export const getLeaveRequests = (params) =>
   api.get('/leave', { params });
+
+export const getSupportRequests = (params) =>
+  api.get('/support/requests', { params });
+
+export const getSupportTicket = (ticketId) =>
+  api.get(`/support/requests/${ticketId}`);
+
+export const updateSupportStatus = (ticketId, status) =>
+  api.put(`/support/requests/${ticketId}/status`, { status });
+
+export const updateSupportPriority = (ticketId, priority) =>
+  api.put(`/support/requests/${ticketId}/priority`, { priority });
+
+export const addSupportResponse = (ticketId, formData) =>
+  api.post(`/support/requests/${ticketId}/responses`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
 
 export const getLeaveStats = () =>
   api.get('/leave/stats');

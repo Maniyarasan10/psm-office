@@ -13,6 +13,7 @@ import com.facebook.react.config.ReactFeatureFlags
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
+import com.facebook.react.flipper.ReactNativeFlipper
 import com.facebook.soloader.SoLoader
 
 import expo.modules.ApplicationLifecycleDispatcher
@@ -52,13 +53,7 @@ class MainApplication : Application(), ReactApplication {
       load()
     }
     if (BuildConfig.DEBUG) {
-      try {
-        val flipper = Class.forName("com.facebook.react.flipper.ReactNativeFlipper")
-        val method = flipper.getMethod("initializeFlipper", Application::class.java, Class.forName("com.facebook.react.ReactInstanceManager"))
-        method.invoke(null, this, reactNativeHost.reactInstanceManager)
-      } catch (e: Exception) {
-        // Flipper not available in release builds
-      }
+      ReactNativeFlipper.initializeFlipper(this, reactNativeHost.reactInstanceManager)
     }
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }

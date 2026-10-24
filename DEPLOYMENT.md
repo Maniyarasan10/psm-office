@@ -3,7 +3,7 @@
 Target: **Google Cloud Compute Engine `e2-micro` (Always Free)** running the Flask API behind Caddy,
 with MongoDB Atlas (M0) and Cloudinary unchanged.
 
-- API hostname: `api.problemsolvingmind.com`
+- API hostname: `<API_HOSTNAME>` (set PUBLIC_BASE_URL in `/etc/psm-office/psm-office.env`)
 - App directory on the server: `/opt/psm-office`
 - Service unit: `psm-office.service` (systemd)
 - Reverse proxy + TLS: Caddy
@@ -112,7 +112,7 @@ Existing records that stay untouched:
 Verify after a few minutes:
 
 ```bash
-nslookup api.problemsolvingmind.com
+nslookup <API_HOSTNAME>
 ```
 
 ---
@@ -206,9 +206,9 @@ Expected output:
 PASS MongoDB is reachable
 PASS media storage is Cloudinary
 --- public https ---
-PASS https://api.problemsolvingmind.com/api/health returned 200
+PASS https://<API_HOSTNAME>/api/health returned 200
 --- websocket ---
-WebSocket https://api.problemsolvingmind.com/api/ws -> HTTP/1.1 101 Switching Protocols / {"type": "connected"}
+WebSocket https://<API_HOSTNAME>/api/ws -> HTTP/1.1 101 Switching Protocols / {"type": "connected"}
 PASS the realtime websocket handshake works
 ```
 
@@ -219,7 +219,7 @@ PASS the realtime websocket handshake works
 The admin panel (Netlify) and the mobile app already read the API URL from their environment
 configuration. If the API URL changes, update it in those environments and redeploy:
 
-- `frontend/.env` → `VITE_API_URL=https://api.problemsolvingmind.com` (the Netlify site is built
+- `frontend/.env` → `VITE_API_URL=https://<API_HOSTNAME>` (the Netlify site is built
   from the `frontend-only` branch, see `frontend/netlify.toml`)
 - `mobile/src/config/env.ts` → the same URL for the app builds
 
@@ -290,7 +290,7 @@ Keep an eye on the egress figure: the API serves small JSON responses, so 30 use
 
 | Symptom | Cause and fix |
 | --- | --- |
-| `curl https://api.problemsolvingmind.com/api/health` times out | DNS not updated yet, or the GCP firewall does not allow tcp:443 |
+| `curl https://<API_HOSTNAME>/api/health` times out | DNS not updated yet, or the GCP firewall does not allow tcp:443 |
 | `Caddy` cannot obtain a certificate | the DNS record is proxied, or port 80 is closed. Use a DNS-only record and open tcp:80 |
 | `no healthy upstream` in the Caddy log | the API is not running: `systemctl status psm-office`, `journalctl -u psm-office -n 50` |
 | The service restarts in a loop | usually the configuration: run `check_config.py`, the message names the failing variable |
