@@ -15,6 +15,13 @@ export function AuthProvider({ children }) {
         delete parsed.refresh_token;
         localStorage.setItem('psm-admin', JSON.stringify(parsed));
       }
+      // Restore the Bearer header from the persisted access token so the
+      // session survives page refreshes without relying on HttpOnly cookies
+      // (which do not reliably round-trip through the Netlify -> Heroku proxy).
+      const token = localStorage.getItem('psm-admin-token');
+      if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      }
       return parsed;
     } catch {
       return null;
@@ -24,13 +31,17 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const res = await api.post('/auth/admin-login', { username, password });
     const userData = res.data || {};
-    // Tokens are set as HttpOnly cookies by the backend. Also attach the token
-    // as a Bearer header so requests work reliably through the Netlify ->
-    // Heroku proxy where cookies may not round-trip correctly. Never persist
-    // tokens in localStorage; keep display metadata only.
+    // Tokens are set as HttpOnly cookies by the backend. Persist the access
+    // token in localStorage and attach it as a Bearer header so requests work
+    // reliably through the Netlify -> Heroku proxy and survive page refreshes.
     const { token, refresh_token, ...safeUser } = userData;
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      try {
+        localStorage.setItem('psm-admin-token', token);
+      } catch {
+        // ignore
+      }
     }
     setUser(safeUser);
     try {
@@ -48,6 +59,11 @@ export function AuthProvider({ children }) {
       // ignore
     }
     delete api.defaults.headers.common['Authorization'];
+    try {
+      localStorage.removeItem('psm-admin-token');
+    } catch {
+      // ignore
+    }
     setUser(null);
     try {
       localStorage.removeItem('psm-admin');

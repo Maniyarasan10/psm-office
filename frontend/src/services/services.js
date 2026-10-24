@@ -42,6 +42,11 @@ api.interceptors.response.use(
           const newToken = response.data?.token;
           if (newToken) {
             api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+            try {
+              localStorage.setItem('psm-admin-token', newToken);
+            } catch {
+              // ignore
+            }
           }
         } finally {
           isRefreshing = false;
@@ -51,7 +56,6 @@ api.interceptors.response.use(
 
       try {
         await refreshPromise;
-        config.headers.Authorization = undefined;
         return api.request(config);
       } catch {
         // Refresh failed: clear session and send to login.
