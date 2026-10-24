@@ -9,17 +9,6 @@ const api = axios.create({
   withCredentials: true,
 });
 
-import axios from 'axios';
-import API_BASE from './api';
-
-const api = axios.create({
-  baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
-  // Send/receive the HttpOnly auth cookie set by the backend.
-  withCredentials: true,
-});
-
 let isRefreshing = false;
 let refreshPromise = null;
 

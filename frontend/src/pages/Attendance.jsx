@@ -26,8 +26,8 @@ export default function Attendance() {
 
   const displayName = (person) => {
     const name = person.name || '';
-    // If the name field literally holds a MongoDB ObjectId, fall back to the
-    # employee/intern ID so a raw ObjectId never shows in the UI.
+     // If the name field literally holds a MongoDB ObjectId, fall back to the
+     // employee/intern ID so a raw ObjectId never shows in the UI.
     if (OBJECT_ID_RE.test(name.trim())) {
       return person.employee_id || person.name || 'Unknown';
     }
