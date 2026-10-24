@@ -211,6 +211,8 @@ def force_https():
     """When true, redirect HTTP to HTTPS and mark responses HTTPS-only."""
     if _bool_env("FORCE_HTTPS", False):
         return True
+    if is_production():
+        return True
     return (public_base_url() or "").lower().startswith("https://")
 
 
@@ -332,7 +334,9 @@ def auth_cookie_samesite():
 
 def auth_cookie_secure():
     """Send the cookie over HTTPS only (always on in production)."""
-    return _bool_env("AUTH_COOKIE_SECURE", force_https())
+    if _bool_env("AUTH_COOKIE_SECURE", None) is not None:
+        return _bool_env("AUTH_COOKIE_SECURE", False)
+    return True if is_production() else force_https()
 
 
 def refresh_token_ttl():

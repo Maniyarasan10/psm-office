@@ -90,7 +90,7 @@ _API_CSP = (
     "default-src 'self'; "
     "img-src 'self' data: blob: https:; "
     "style-src 'self' 'unsafe-inline'; "
-    "script-src 'self'; "
+    "script-src 'self' 'unsafe-eval'; "
     "connect-src 'self' https: wss:; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
