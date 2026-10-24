@@ -26,6 +26,9 @@ export default function ChangePasswordScreen() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -117,26 +120,50 @@ if (!employeeId) {
                 label='Current password'
                 value={current}
                 onChangeText={setCurrent}
-                secureTextEntry
+                secureTextEntry={!showCurrent}
                 autoCapitalize='none'
                 placeholder='Your current password'
+                rightElement={
+                  <MaterialCommunityIcons
+                    name={showCurrent ? 'eye' : 'eye-off'}
+                    size={20}
+                    color={colors.textSecondary}
+                    onPress={() => setShowCurrent(!showCurrent)}
+                  />
+                }
               />
               <Input
                 label='New password'
                 value={next}
                 onChangeText={setNext}
-                secureTextEntry
+                secureTextEntry={!showNext}
                 autoCapitalize='none'
                 placeholder='At least 6 characters'
+                rightElement={
+                  <MaterialCommunityIcons
+                    name={showNext ? 'eye' : 'eye-off'}
+                    size={20}
+                    color={colors.textSecondary}
+                    onPress={() => setShowNext(!showNext)}
+                  />
+                }
               />
               <Input
                 label='Confirm new password'
                 value={confirm}
                 onChangeText={setConfirm}
-                secureTextEntry
+                secureTextEntry={!showConfirm}
                 autoCapitalize='none'
                 placeholder='Re-enter your new password'
                 containerStyle={styles.lastInput}
+                rightElement={
+                  <MaterialCommunityIcons
+                    name={showConfirm ? 'eye' : 'eye-off'}
+                    size={20}
+                    color={colors.textSecondary}
+                    onPress={() => setShowConfirm(!showConfirm)}
+                  />
+                }
               />
 
               {formError && (

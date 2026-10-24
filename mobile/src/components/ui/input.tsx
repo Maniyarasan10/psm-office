@@ -7,6 +7,7 @@ interface InputProps extends TextInputProps {
   error?: string;
   containerStyle?: ViewStyle;
   disabled?: boolean;
+  rightElement?: React.ReactNode;
 }
 
 const Input: React.FC<InputProps> = ({
@@ -14,17 +15,21 @@ const Input: React.FC<InputProps> = ({
   error,
   containerStyle,
   disabled = false,
+  rightElement,
   ...rest
 }) => {
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
-<TextInput
-        {...rest}
-        editable={!disabled}
-        style={[styles.input, error ? styles.inputError : null, disabled && styles.inputDisabled, rest.style]}
-        placeholderTextColor={colors.textMuted}
-      />
+      <View style={styles.inputWrap}>
+        <TextInput
+          {...rest}
+          editable={!disabled}
+          style={[styles.input, error ? styles.inputError : null, disabled && styles.inputDisabled, rest.style]}
+          placeholderTextColor={colors.textMuted}
+        />
+        {rightElement && <View style={styles.rightElement}>{rightElement}</View>}
+      </View>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
@@ -39,17 +44,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
-  input: {
-    width: '100%',
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.medium,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    minHeight: 44,
+  },
+  input: {
+    flex: 1,
     ...typography.body,
     color: colors.textPrimary,
-    minHeight: 44,
+  },
+  rightElement: {
+    marginLeft: spacing.xs,
   },
   inputError: {
     borderColor: colors.error,
