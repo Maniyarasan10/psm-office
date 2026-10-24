@@ -38,7 +38,11 @@ api.interceptors.response.use(
         try {
           // The browser sends the HttpOnly psm_refresh cookie automatically;
           // the backend mints a new access token and sets it as a cookie.
-          await api.post('/api/auth/refresh-token');
+          const response = await api.post('/api/auth/refresh-token');
+          const newToken = response.data?.token;
+          if (newToken) {
+            api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+          }
         } finally {
           isRefreshing = false;
           refreshPromise = null;
