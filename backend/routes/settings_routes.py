@@ -471,6 +471,12 @@ def update_announcement_route(announcement_id):
     if not update_announcement(announcement_id, content, topic=topic):
         return jsonify({"error": "Announcement not found"}), 404
     log_activity("Announcement Edited", announcement_id)
+    # Broadcast update so all clients refresh
+    try:
+        from backend.realtime import notify_all
+        notify_all("announcement")
+    except Exception:
+        pass
     return jsonify({"message": "Announcement updated"})
 
 
