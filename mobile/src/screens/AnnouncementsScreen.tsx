@@ -103,6 +103,10 @@ export default function AnnouncementsScreen() {
 
   const submitEdit = useCallback(async () => {
     if (!editingId) return;
+    if (!editContent.trim()) {
+      setEditError('Announcement content is required');
+      return;
+    }
     const res = await editAnnouncement(editingId, editTopic, editContent);
     if (res.ok) {
       setEditError(null);
@@ -200,15 +204,6 @@ export default function AnnouncementsScreen() {
                   <View style={styles.timeTag}>
                     <Text style={styles.timeTagDay}>{announcementDayLabel(item.created_at, now)}</Text>
                     <Text style={styles.timeTagTime}>{announcementTimeLabel(item.created_at)}</Text>
-                    {canSend && (
-                      <MaterialCommunityIcons
-                        name='dots-vertical'
-                        size={18}
-                        color={colors.textMuted}
-                        style={styles.optionsIcon}
-                        accessibilityLabel='Edit or delete'
-                      />
-                    )}
                   </View>
                 </View>
 
@@ -426,9 +421,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  optionsIcon: {
-    marginLeft: spacing.sm,
   },
   skeleton: {
     gap: spacing.xs,

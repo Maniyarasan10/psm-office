@@ -151,13 +151,14 @@ export function useAnnouncement(): AnnouncementData {
       }
       setAnnouncement(trimmed);
       return { ok: true };
-    } catch (err) {
-      const axiosErr = err as AxiosError<{ error?: string }>;
-      const message =
-        axiosErr.response?.data?.error ??
-        'Failed to publish. Check your connection and try again.';
-      return { ok: false, message };
-    } finally {
+      } catch (err) {
+        const axiosErr = err as AxiosError<{ error?: string; message?: string }>;
+        const message =
+          axiosErr.response?.data?.error ??
+          axiosErr.response?.data?.message ??
+          (axiosErr.message ? `Update failed: ${axiosErr.message}` : 'Failed to update. Check your connection and try again.');
+        return { ok: false, message };
+      } finally {
       setSending(false);
     }
   }, [personId, personTypeValue]);
