@@ -14,6 +14,7 @@ import { colors, spacing, typography } from './src/theme';
 import { NotificationsProvider, useNotifications } from './src/notifications/NotificationContext';
 import { navigateToNotificationRoute } from './src/utils/notifications';
 import { NotificationBanner } from './src/components/NotificationBanner';
+import { NetworkProvider } from './src/hooks/useNetworkStatus';
 
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -317,13 +318,15 @@ function AppContent() {
     <SafeAreaProvider>
       <AuthProvider>
         <RealtimeProvider>
-          <NotificationsProvider>
-            <NavigationContainer ref={navigationRef}>
-              <AppNavigator />
-              <NotificationRouter />
-              <StatusBar style='dark' backgroundColor={colors.surface} />
-            </NavigationContainer>
-          </NotificationsProvider>
+          <NetworkProvider>
+            <NotificationsProvider>
+              <NavigationContainer ref={navigationRef}>
+                <AppNavigator />
+                <NotificationRouter />
+                <StatusBar style='dark' backgroundColor={colors.surface} />
+              </NavigationContainer>
+            </NotificationsProvider>
+          </NetworkProvider>
         </RealtimeProvider>
       </AuthProvider>
     </SafeAreaProvider>

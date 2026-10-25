@@ -3,6 +3,7 @@ import { AttendanceRecord, LeaveRequest } from '../types';
 import { getPersonAttendance, getMyLeaveRequests, submitLeaveRequest } from '../services/api';
 import { LeaveType } from '../utils/leave';
 import { cacheKey, readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const ABSENCE_LIMIT = 30;
 
@@ -56,6 +57,7 @@ export function useLeave(scope: LeaveScope | null): LeaveData {
   const actionBusyRef = useRef(false);
   const scopeRef = useRef<LeaveScope | null>(scope);
   scopeRef.current = scope;
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const cache = cacheKey('leave', scope?.personType, scope?.personId);
 
@@ -109,7 +111,11 @@ export function useLeave(scope: LeaveScope | null): LeaveData {
       setError(false);
     } catch {
       if (id !== requestId.current) return;
-      setError(true);
+      if (!isOnline) {
+        setError(false);
+      } else {
+        setError(true);
+      }
     } finally {
       if (id === requestId.current) {
         setActionError(null);
@@ -137,6 +143,12 @@ export function useLeave(scope: LeaveScope | null): LeaveData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   const submit = useCallback(
     async (payload: LeaveSubmitPayload): Promise<LeaveSubmitResult> => {

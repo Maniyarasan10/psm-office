@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useRealtime } from '../context/RealtimeContext';
 import { Announcement } from '../types';
 import { readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const ANNOUNCEMENT_CACHE_KEY = 'announcements';
 
@@ -54,6 +55,8 @@ export function useAnnouncement(): AnnouncementData {
 
   const requestId = useRef(0);
 
+  const { isOnline, registerReconnect } = useNetworkStatus();
+
   useEffect(() => {
     let active = true;
     void readCache<AnnouncementCache>(ANNOUNCEMENT_CACHE_KEY).then(cached => {
@@ -95,7 +98,11 @@ export function useAnnouncement(): AnnouncementData {
       });
       setError(false);
     } else {
-      setError(true);
+      if (!isOnline) {
+        setError(false);
+      } else {
+        setError(true);
+      }
     }
 
     if (permRes?.data && typeof permRes.data.can_send === 'boolean') {
@@ -217,6 +224,12 @@ export function useAnnouncement(): AnnouncementData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('silent');
+    });
+  }, [registerReconnect, run]);
 
   return {
     announcement,

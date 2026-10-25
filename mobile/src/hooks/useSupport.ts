@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SupportStatus, SupportStatusStats, SupportTicket } from '../types';
 import { getSupportCategories, getSupportRequests } from '../services/api';
 import { SUPPORT_PAGE_SIZE } from '../utils/support';
+import { useNetworkStatus } from './useNetworkStatus';
 
 export interface SupportScope {
   personId: string;
@@ -72,6 +73,7 @@ export function useSupport(scope: SupportScope | null): SupportData {
   const loadMoreBusyRef = useRef(false);
   const categoriesLoadedRef = useRef(false);
   const firstRunRef = useRef(true);
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const scopeRef = useRef<SupportScope | null>(scope);
   scopeRef.current = scope;
@@ -135,7 +137,11 @@ export function useSupport(scope: SupportScope | null): SupportData {
         setError(false);
       } catch {
         if (id !== requestId.current) return;
-        setError(true);
+        if (!isOnline) {
+          setError(false);
+        } else {
+          setError(true);
+        }
       } finally {
         if (id === requestId.current) {
           queryBusyRef.current = false;
@@ -168,6 +174,12 @@ export function useSupport(scope: SupportScope | null): SupportData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run({ mode: 'refresh' });
+    });
+  }, [registerReconnect, run]);
 
   const loadMore = useCallback(() => {
     const currentScope = scopeRef.current;
@@ -202,7 +214,11 @@ export function useSupport(scope: SupportScope | null): SupportData {
         setError(false);
       } catch {
         if (id !== requestId.current) return;
-        setError(true);
+        if (!isOnline) {
+          setError(false);
+        } else {
+          setError(true);
+        }
       } finally {
         // Always release the guard so a refresh that supersedes pagination
         // can't leave "load more" blocked.
@@ -266,6 +282,7 @@ export function useSupportSummary(scope: SupportScope | null): SupportSummaryDat
   const scopeRef = useRef<SupportScope | null>(scope);
   scopeRef.current = scope;
   const scopeKey = scope ? `${scope.personId}:${scope.personType}` : '';
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const run = useCallback(
     async (mode: 'initial' | 'silent') => {
@@ -288,12 +305,16 @@ export function useSupportSummary(scope: SupportScope | null): SupportSummaryDat
         setError(false);
       } catch {
         if (id !== requestId.current) return;
-        setError(true);
+        if (!isOnline) {
+          setError(false);
+        } else {
+          setError(true);
+        }
       } finally {
         if (id === requestId.current) setLoading(false);
       }
     },
-    [scopeKey]
+    [scopeKey, isOnline]
   );
 
   const reload = useCallback(() => {
@@ -310,6 +331,12 @@ export function useSupportSummary(scope: SupportScope | null): SupportSummaryDat
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('silent');
+    });
+  }, [registerReconnect, run]);
 
   return { total, stats, loading, error, reload, silentReload };
 }

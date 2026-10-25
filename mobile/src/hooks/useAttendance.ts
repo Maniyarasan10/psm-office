@@ -7,6 +7,7 @@ import {
   getPersonAttendanceSummary,
   getSettings,
 } from '../services/api';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const HISTORY_LIMIT = 90;
 
@@ -49,6 +50,7 @@ export function useAttendance(scope: AttendanceScope | null): AttendanceData {
   const actionBusyRef = useRef(false);
   const scopeRef = useRef<AttendanceScope | null>(scope);
   scopeRef.current = scope;
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const run = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     const currentScope = scopeRef.current;
@@ -73,6 +75,8 @@ export function useAttendance(scope: AttendanceScope | null): AttendanceData {
     if (recordsResult.status === 'fulfilled') {
       setRecords(recordsResult.value.data ?? []);
       setRecordsError(false);
+    } else if (!isOnline) {
+      setRecordsError(false);
     } else {
       setRecordsError(true);
     }
@@ -80,12 +84,16 @@ export function useAttendance(scope: AttendanceScope | null): AttendanceData {
     if (summaryResult.status === 'fulfilled') {
       setSummary(summaryResult.value.data);
       setSummaryError(false);
+    } else if (!isOnline) {
+      setSummaryError(false);
     } else {
       setSummaryError(true);
     }
 
     if (settingsResult.status === 'fulfilled') {
       setSettings(settingsResult.value.data);
+      setSettingsError(false);
+    } else if (!isOnline) {
       setSettingsError(false);
     } else {
       setSettingsError(true);
@@ -110,6 +118,12 @@ export function useAttendance(scope: AttendanceScope | null): AttendanceData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   const checkIn = useCallback(async (): Promise<string | null> => {
     const currentScope = scopeRef.current;

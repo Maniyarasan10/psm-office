@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Task, TaskStatus } from '../types';
 import { addTaskComment, getMyTasks, updateTaskStatus } from '../services/api';
 import { cacheKey, readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 export interface TasksScope {
   personId: string;
@@ -44,6 +45,7 @@ export function useTasks(scope: TasksScope | null): TasksData {
   const actionBusyRef = useRef(false);
   const scopeRef = useRef<TasksScope | null>(scope);
   scopeRef.current = scope;
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const cache = cacheKey('tasks', scope?.personType, scope?.personId);
 
@@ -81,7 +83,11 @@ export function useTasks(scope: TasksScope | null): TasksData {
       setError(false);
     } catch {
       if (id !== requestId.current) return;
-      setError(true);
+      if (!isOnline) {
+        setError(false);
+      } else {
+        setError(true);
+      }
     } finally {
       if (id === requestId.current) {
         setLoading(false);
@@ -108,6 +114,12 @@ export function useTasks(scope: TasksScope | null): TasksData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   const updateStatus = useCallback(
     async (taskId: string, nextStatus: TaskStatus): Promise<boolean> => {

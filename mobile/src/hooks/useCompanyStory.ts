@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSettings } from '../services/api';
 import { readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const STORY_CACHE_KEY = 'company-story';
 
@@ -23,6 +24,7 @@ export function useCompanyStory(): CompanyStory {
   const [vision, setVision] = useState('');
   const [loading, setLoading] = useState(true);
   const activeRef = useRef(true);
+  const { registerReconnect } = useNetworkStatus();
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +56,12 @@ export function useCompanyStory(): CompanyStory {
       activeRef.current = false;
     };
   }, [load]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void load();
+    });
+  }, [registerReconnect, load]);
 
   return { mission, vision, loading, reload: load };
 }

@@ -3,6 +3,7 @@ import { DirectoryPerson, PersonType } from '../types';
 import { getEmployees, getInterns, RawPersonRecord } from '../services/api';
 import { toDirectoryPerson, sortPeopleByName } from '../utils/people';
 import { readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const PEOPLE_CACHE_KEY = 'people';
 
@@ -40,6 +41,7 @@ export function usePeopleDirectory(): PeopleDirectoryData {
   const [error, setError] = useState(false);
 
   const requestId = useRef(0);
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   useEffect(() => {
     let active = true;
@@ -81,7 +83,11 @@ export function usePeopleDirectory(): PeopleDirectoryData {
       setError(false);
     } catch {
       if (id !== requestId.current) return;
-      setError(true);
+      if (!isOnline) {
+        setError(false);
+      } else {
+        setError(true);
+      }
     } finally {
       if (id === requestId.current) {
         setLoading(false);
@@ -104,6 +110,12 @@ export function usePeopleDirectory(): PeopleDirectoryData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   const departments = useMemo(() => {
     const set = new Set<string>();

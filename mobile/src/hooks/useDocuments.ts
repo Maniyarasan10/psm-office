@@ -3,6 +3,7 @@ import { EmployeeDocument } from '../types';
 import { getDocuments, getDocumentCategories, uploadDocument } from '../services/api';
 import { cacheKey, readCache, writeCache } from '../services/offlineCache';
 import { apiErrorMessage } from '../utils/apiError';
+import { useNetworkStatus } from './useNetworkStatus';
 
 interface DocumentsCache {
   documents: EmployeeDocument[];
@@ -57,6 +58,7 @@ export function useDocuments(identity: DocumentIdentity | null): DocumentsData {
 
   const requestId = useRef(0);
   const actionBusyRef = useRef(false);
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const cacheRef = useRef(cacheKey('documents', identity?._id));
   cacheRef.current = cacheKey('documents', identity?._id);
@@ -109,7 +111,11 @@ export function useDocuments(identity: DocumentIdentity | null): DocumentsData {
       setError(false);
     } catch {
       if (id !== requestId.current) return;
-      setError(true);
+      if (!isOnline) {
+        setError(false);
+      } else {
+        setError(true);
+      }
     } finally {
       if (id === requestId.current) {
         setActionError(null);
@@ -137,6 +143,12 @@ export function useDocuments(identity: DocumentIdentity | null): DocumentsData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   const myDocuments = useMemo(() => {
     const ids = new Set(

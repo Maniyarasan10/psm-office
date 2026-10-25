@@ -9,6 +9,7 @@ import {
 } from '../services/api';
 import { toDirectoryPerson } from '../utils/people';
 import { cacheKey, readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 export interface ProfileEditFields {
   name?: string;
@@ -45,6 +46,7 @@ export function useMyProfile(personType: 'employee' | 'intern', personId: string
 
   const requestId = useRef(0);
   const actionBusyRef = useRef(false);
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const cache = cacheKey('profile', personType, personId);
 
@@ -91,7 +93,11 @@ export function useMyProfile(personType: 'employee' | 'intern', personId: string
         }
       } catch {
         if (id !== requestId.current) return;
-        setError(true);
+        if (!isOnline) {
+          setError(false);
+        } else {
+          setError(true);
+        }
       } finally {
         if (id === requestId.current) {
           setLoading(false);
@@ -120,6 +126,12 @@ export function useMyProfile(personType: 'employee' | 'intern', personId: string
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   const save = useCallback(
     async (fields: ProfileEditFields): Promise<ProfileSaveResult> => {

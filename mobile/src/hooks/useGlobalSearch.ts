@@ -20,6 +20,7 @@ import {
   SearchResult,
   byMatchRank,
 } from '../utils/search';
+import { useNetworkStatus } from './useNetworkStatus';
 
 export interface GlobalSearchScope {
   personId: string;
@@ -70,6 +71,7 @@ export function useGlobalSearch(scope: GlobalSearchScope | null): GlobalSearchDa
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const todayRef = useRef(currentLocalIso());
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -173,7 +175,11 @@ export function useGlobalSearch(scope: GlobalSearchScope | null): GlobalSearchDa
     settled.forEach((outcome, index) => {
       const key = wanted[index];
       if (outcome.status === 'fulfilled') buckets.set(key, outcome.value);
-      else failedKeys.push(key);
+      else if (!isOnline) {
+        // offline: don't count as failed, keep prior results
+      } else {
+        failedKeys.push(key);
+      }
     });
 
     const flat: SearchResult[] = [];
@@ -213,6 +219,13 @@ export function useGlobalSearch(scope: GlobalSearchScope | null): GlobalSearchDa
   }, [query, category, execute]);
 
   const ready = appliedQuery.length >= MIN_QUERY_LENGTH || loading;
+
+  // Re-run the last search when the connection returns so results stay fresh.
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run();
+    });
+  }, [registerReconnect, run]);
 
   return useMemo(
     () => ({

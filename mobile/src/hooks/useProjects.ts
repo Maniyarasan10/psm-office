@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Project } from '../types';
 import { getProjects } from '../services/api';
 import { readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const PROJECTS_CACHE_KEY = 'projects';
 
@@ -26,6 +27,7 @@ export function useProjects(): ProjectsData {
   const [error, setError] = useState(false);
 
   const requestId = useRef(0);
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   useEffect(() => {
     let active = true;
@@ -53,7 +55,11 @@ export function useProjects(): ProjectsData {
       setError(false);
     } catch {
       if (id !== requestId.current) return;
-      setError(true);
+      if (!isOnline) {
+        setError(false);
+      } else {
+        setError(true);
+      }
     } finally {
       if (id === requestId.current) {
         setLoading(false);
@@ -80,6 +86,12 @@ export function useProjects(): ProjectsData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   return { projects, loading, refreshing, error, reload, refresh, silentReload };
 }

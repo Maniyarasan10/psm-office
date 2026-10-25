@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AttendanceRecord, Task } from '../types';
 import { getAnnouncements, getMyTasks, getPersonAttendance } from '../services/api';
 import { cacheKey, readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 interface HomeCache {
   attendance: AttendanceRecord | null;
@@ -52,6 +53,7 @@ export function useHomeData(scope: HomeScope | null): HomeData {
   const personId = scope?.personId ?? '';
   const personType = scope?.personType ?? '';
   const cache = cacheKey('home', personType, personId);
+  const { isOnline, registerReconnect } = useNetworkStatus();
   const latestRef = useRef<HomeCache>({
     attendance: null,
     attendanceDate: '',
@@ -108,6 +110,8 @@ export function useHomeData(scope: HomeScope | null): HomeData {
       next.attendanceDate = todayIso;
       setAttendance(next.attendance);
       setAttendanceError(false);
+    } else if (!isOnline) {
+      setAttendanceError(false);
     } else {
       setAttendanceError(true);
     }
@@ -115,6 +119,8 @@ export function useHomeData(scope: HomeScope | null): HomeData {
     if (tasksResult.status === 'fulfilled') {
       next.tasks = tasksResult.value.data;
       setTasks(next.tasks);
+      setTasksError(false);
+    } else if (!isOnline) {
       setTasksError(false);
     } else {
       setTasksError(true);
@@ -125,6 +131,8 @@ export function useHomeData(scope: HomeScope | null): HomeData {
       next.announcementTopic = announcementsResult.value.data?.topic ?? '';
       setAnnouncement(next.announcement);
       setAnnouncementTopic(next.announcementTopic);
+      setAnnouncementsError(false);
+    } else if (!isOnline) {
       setAnnouncementsError(false);
     } else {
       setAnnouncementsError(true);
@@ -152,6 +160,14 @@ export function useHomeData(scope: HomeScope | null): HomeData {
       requestId.current += 1;
     };
   }, [run]);
+
+  // When the connection returns, refresh every screen so stale cache is
+  // replaced with live data without the user having to pull-to-refresh.
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   return {
     attendance,

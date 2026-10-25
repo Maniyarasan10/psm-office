@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AttendanceRecord, Task } from '../types';
 import { getMyTasks, getPersonAttendance } from '../services/api';
 import { cacheKey, readCache, writeCache } from '../services/offlineCache';
+import { useNetworkStatus } from './useNetworkStatus';
 
 /** Covers the current month plus generous history for context sections. */
 const ATTENDANCE_LIMIT = 90;
@@ -44,6 +45,7 @@ export function useWorkSummary(scope: WorkSummaryScope | null): WorkSummaryData 
   const requestId = useRef(0);
   const scopeRef = useRef<WorkSummaryScope | null>(scope);
   scopeRef.current = scope;
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const cache = cacheKey('work-summary', scope?.personType, scope?.personId);
 
@@ -83,12 +85,16 @@ export function useWorkSummary(scope: WorkSummaryScope | null): WorkSummaryData 
     if (tasksResult.status === 'fulfilled') {
       setTasks(tasksResult.value.data ?? []);
       setTasksError(false);
+    } else if (!isOnline) {
+      setTasksError(false);
     } else {
       setTasksError(true);
     }
 
     if (attendanceResult.status === 'fulfilled') {
       setRecords(Array.isArray(attendanceResult.value.data) ? attendanceResult.value.data : []);
+      setAttendanceError(false);
+    } else if (!isOnline) {
       setAttendanceError(false);
     } else {
       setAttendanceError(true);
@@ -126,6 +132,12 @@ export function useWorkSummary(scope: WorkSummaryScope | null): WorkSummaryData 
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   return {
     tasks,

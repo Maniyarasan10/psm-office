@@ -13,6 +13,7 @@ import {
   CALENDAR_LEAVE_WINDOW,
 } from '../utils/calendar';
 import { todayIso } from '../utils/leave';
+import { useNetworkStatus } from './useNetworkStatus';
 
 export interface CalendarScope {
   personId: string;
@@ -71,6 +72,7 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
   const anySuccessRef = useRef(false);
   const scopeRef = useRef<CalendarScope | null>(scope);
   scopeRef.current = scope;
+  const { isOnline, registerReconnect } = useNetworkStatus();
 
   const run = useCallback(async (mode: 'initial' | 'refresh' | 'silent') => {
     const currentScope = scopeRef.current;
@@ -98,6 +100,8 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
 
     if (tasksResult.status === 'fulfilled') {
       setTasks(Array.isArray(tasksResult.value.data) ? tasksResult.value.data : []);
+    } else if (!isOnline) {
+      // offline: keep whatever tasks we have, no error screen
     } else {
       failed.push('tasks');
     }
@@ -105,12 +109,16 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
     if (leaveResult.status === 'fulfilled') {
       const records = Array.isArray(leaveResult.value.data) ? leaveResult.value.data : [];
       setAbsenceDates(records.filter(record => record.status === 'Absent').map(record => record.date));
+    } else if (!isOnline) {
+      // offline: keep cached absence dates
     } else {
       failed.push('leave');
     }
 
     if (birthdaysResult.status === 'fulfilled') {
       setBirthdays(Array.isArray(birthdaysResult.value.data) ? birthdaysResult.value.data : []);
+    } else if (!isOnline) {
+      // offline: keep cached birthdays
     } else {
       failed.push('birthdays');
     }
@@ -118,6 +126,8 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
     if (personalResult.status === 'fulfilled') {
       const data = personalResult.value.data;
       setPersonalItems(Array.isArray(data) ? data : []);
+    } else if (!isOnline) {
+      // offline: keep cached personal items
     } else {
       failed.push('personal');
     }
@@ -148,6 +158,12 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('refresh');
+    });
+  }, [registerReconnect, run]);
 
   const today = todayIso();
 
@@ -194,6 +210,8 @@ export function useCalendarSummary(windowDays: number | null): CalendarSummaryDa
 
   const requestId = useRef(0);
 
+  const { isOnline, registerReconnect } = useNetworkStatus();
+
   const run = useCallback(
     async (mode: 'initial' | 'silent') => {
       if (windowDays === null) {
@@ -211,12 +229,16 @@ export function useCalendarSummary(windowDays: number | null): CalendarSummaryDa
         setError(false);
       } catch {
         if (id !== requestId.current) return;
-        setError(true);
+        if (!isOnline) {
+          setError(false);
+        } else {
+          setError(true);
+        }
       } finally {
         if (id === requestId.current) setLoading(false);
       }
     },
-    [windowDays]
+    [windowDays, isOnline]
   );
 
   const refresh = useCallback(() => {
@@ -229,6 +251,12 @@ export function useCalendarSummary(windowDays: number | null): CalendarSummaryDa
       requestId.current += 1;
     };
   }, [run]);
+
+  useEffect(() => {
+    return registerReconnect(() => {
+      void run('silent');
+    });
+  }, [registerReconnect, run]);
 
   return { birthdays, loading, error, refresh };
 }
