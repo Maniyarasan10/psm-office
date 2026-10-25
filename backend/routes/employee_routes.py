@@ -5,7 +5,11 @@ from backend.models.employee_model import (
     delete_employee, count_employees, count_active_employees, upcoming_birthdays,
 )
 from backend.models.auth_model import set_password
+from backend.models.project_model import (
+    get_project_by_title, add_project_member, remove_project_member,
+)
 from backend.utils.activity_log import log_activity
+from backend.utils.notify import notify_person
 from backend.utils.photo_utils import delete_profile_file, normalize_photo_path
 from backend.utils.auth import admin_required, auth_required, current_auth
 from backend.utils.authz import can_access_person, is_admin
@@ -83,6 +87,7 @@ def create_employee():
 def update_emp(employee_id):
     data = request.get_json(silent=True) or {}
     existing = get_employee(employee_id)
+    old_project = (existing or {}).get("current_project") or ""
     auth = current_auth()
     if auth and not is_admin(auth):
         if not existing or not can_access_person(
@@ -109,6 +114,33 @@ def update_emp(employee_id):
         old_photo = existing.get("photo_path")
         if old_photo and old_photo != data.get("photo_path"):
             delete_profile_file(old_photo)
+
+    # Sync project membership when the employee's current project changes.
+    new_project = (data.get("current_project") or "").strip()
+    if new_project != old_project:
+        if old_project:
+            old_proj = get_project_by_title(old_project)
+            if old_proj:
+                remove_project_member(
+                    str(old_proj.get("_id")), employee_id,
+                    (existing or {}).get("person_type") or "employee",
+                )
+        if new_project:
+            new_proj = get_project_by_title(new_project)
+            if new_proj:
+                add_project_member(
+                    str(new_proj.get("_id")), employee_id, "employee",
+                )
+                notify_person(
+                    "employee", employee_id,
+                    "Added to project",
+                    body=f"You were added to {new_proj.get('title', 'a project')}",
+                    route="work",
+                    category="Projects",
+                    ref_id=str(new_proj.get("_id")),
+                    dedupe_key=f"project:{new_proj.get('_id')}:member:{employee_id}",
+                )
+
     return jsonify({"message": "Updated"})
 
 

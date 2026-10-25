@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from bson import ObjectId
 from backend.db import get_db, serialize_doc
@@ -198,3 +199,47 @@ def delete_project(project_id):
 def project_status_counts():
     db = get_db()
     return {status: db.projects.count_documents({"status": status}) for status in PROJECT_STATUSES}
+
+
+def get_project_by_title(title):
+    """Find a project by title (case-insensitive, exact match). Returns the doc or None."""
+    if not title:
+        return None
+    db = get_db()
+    return db.projects.find_one({"title": {"$regex": f"^{re.escape(title.strip())}$", "$options": "i"}})
+
+
+def add_project_member(project_id, person_id, person_type="employee"):
+    """Append a person to a project's member list without replacing it."""
+    db = get_db()
+    project = db.projects.find_one({"_id": _to_oid(project_id)})
+    if not project:
+        return None
+    members = _normalize_members(project.get("members") or [])
+    key = (str(person_id), person_type)
+    if any((m["person_id"], m["person_type"]) == key for m in members):
+        return members
+    members.append({"person_id": str(person_id), "person_type": person_type})
+    db.projects.update_one(
+        {"_id": _to_oid(project_id)},
+        {"$set": {"members": members, "updated_at": datetime.utcnow()}},
+    )
+    return members
+
+
+def remove_project_member(project_id, person_id, person_type="employee"):
+    """Remove a person from a project's member list."""
+    db = get_db()
+    project = db.projects.find_one({"_id": _to_oid(project_id)})
+    if not project:
+        return None
+    members = _normalize_members(project.get("members") or [])
+    key = (str(person_id), person_type)
+    filtered = [m for m in members if (m["person_id"], m["person_type"]) != key]
+    if len(filtered) == len(members):
+        return members
+    db.projects.update_one(
+        {"_id": _to_oid(project_id)},
+        {"$set": {"members": filtered, "updated_at": datetime.utcnow()}},
+    )
+    return filtered

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   getEmployees, getNextEmployeeId, createEmployee, updateEmployee, deleteEmployee,
   uploadProfilePhoto, profilePhotoUrl, sendPasswordResetOtp,
+  getProjects,
 } from '../services/services';
 import { DEPARTMENTS, WORK_MODES, designationsFor, allDesignations } from '../constants/options';
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineCamera } from 'react-icons/hi';
@@ -15,6 +16,7 @@ const defaultForm = {
 
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -37,6 +39,19 @@ export default function Employees() {
   useEffect(() => {
     loadEmployees();
   }, [search]);
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      const res = await getProjects();
+      setProjects(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const loadEmployees = async () => {
     try {
@@ -396,11 +411,15 @@ export default function Employees() {
                 </div>
                 <div className="form-group">
                   <label>Current Project</label>
-                  <input
+                  <select
                     value={form.current_project}
                     onChange={(e) => setForm({ ...form, current_project: e.target.value })}
-                    placeholder="e.g. school management system"
-                  />
+                  >
+                    <option value="">None / Unassigned</option>
+                    {projects.map((proj) => (
+                      <option key={proj._id} value={proj.title}>{proj.title}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>GitHub Link</label>

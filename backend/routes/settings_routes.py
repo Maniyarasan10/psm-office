@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from functools import wraps
 from backend.models.settings_model import (
     get_settings,
     update_settings,
@@ -11,6 +12,7 @@ from backend.models.announcement_model import (
     add_announcement,
     list_announcements,
     delete_announcement,
+    update_announcement,
 )
 from backend.models.employee_model import (
     count_active_employees,
@@ -31,10 +33,26 @@ from backend.utils.auth import (
     announcement_sender_required,
     can_send_announcement,
     current_auth,
+    _reject,
 )
 from datetime import date as date_type, datetime
 
 settings_bp = Blueprint("settings", __name__)
+
+
+def announcement_manager_required(fn):
+    """Allow admins and allocated announcement senders to manage announcements."""
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        auth = current_auth()
+        if not auth:
+            return _reject("Authentication required", 401)
+        if not can_send_announcement(auth):
+            return _reject("You are not allowed to manage announcements", 403)
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _broadcast_announcement(content, topic=None):
@@ -423,7 +441,7 @@ def save_announcement():
 
 
 @settings_bp.route("/api/announcements/<announcement_id>", methods=["DELETE"])
-@admin_required
+@announcement_manager_required
 def delete_announcement_route(announcement_id):
     if announcement_id == "legacy":
         save_note("")
@@ -438,6 +456,22 @@ def delete_announcement_route(announcement_id):
     save_note(remaining[0]["content"] if remaining else "")
     log_activity("Announcement Deleted", announcement_id)
     return jsonify({"message": "Announcement deleted"})
+
+
+@settings_bp.route("/api/announcements/<announcement_id>", methods=["PUT"])
+@announcement_manager_required
+def update_announcement_route(announcement_id):
+    if announcement_id == "legacy":
+        return jsonify({"error": "Legacy note cannot be edited"}), 400
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+    topic = (data.get("topic") or "").strip()
+    if not content:
+        return jsonify({"error": "Announcement content is required"}), 400
+    if not update_announcement(announcement_id, content, topic=topic):
+        return jsonify({"error": "Announcement not found"}), 404
+    log_activity("Announcement Edited", announcement_id)
+    return jsonify({"message": "Announcement updated"})
 
 
 @settings_bp.route("/api/announcement-senders", methods=["GET"])

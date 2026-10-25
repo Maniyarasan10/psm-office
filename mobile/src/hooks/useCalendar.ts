@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BirthdayEntry, Task } from '../types';
-import { getMyTasks, getPersonAttendance, getUpcomingBirthdays } from '../services/api';
+import { BirthdayEntry, PersonalCalendarItem, Task } from '../types';
+import {
+  getMyTasks,
+  getPersonAttendance,
+  getUpcomingBirthdays,
+  getPersonalCalendar,
+} from '../services/api';
 import {
   CalendarIndex,
   buildCalendarIndex,
@@ -14,12 +19,13 @@ export interface CalendarScope {
   personType: string;
 }
 
-export type CalendarSourceKey = 'tasks' | 'leave' | 'birthdays';
+export type CalendarSourceKey = 'tasks' | 'leave' | 'birthdays' | 'personal';
 
 export const CALENDAR_SOURCE_LABEL: Record<CalendarSourceKey, string> = {
   tasks: 'deadlines',
   leave: 'leave days',
   birthdays: 'birthdays',
+  personal: 'personal notes',
 };
 
 export interface CalendarData {
@@ -41,6 +47,7 @@ const EMPTY_INDEX = buildCalendarIndex({
   tasks: [],
   absenceDates: [],
   birthdays: [],
+  personalItems: [],
   today: todayIso(),
 });
 
@@ -54,6 +61,7 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [absenceDates, setAbsenceDates] = useState<string[]>([]);
   const [birthdays, setBirthdays] = useState<BirthdayEntry[]>([]);
+  const [personalItems, setPersonalItems] = useState<PersonalCalendarItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
@@ -76,11 +84,13 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
     if (mode === 'initial') setLoading(true);
     if (mode === 'refresh') setRefreshing(true);
 
-    const [tasksResult, leaveResult, birthdaysResult] = await Promise.allSettled([
-      getMyTasks(currentScope.personId, currentScope.personType),
-      getPersonAttendance(currentScope.personId, CALENDAR_LEAVE_WINDOW),
-      getUpcomingBirthdays(CALENDAR_BIRTHDAY_WINDOW),
-    ]);
+    const [tasksResult, leaveResult, birthdaysResult, personalResult] =
+      await Promise.allSettled([
+        getMyTasks(currentScope.personId, currentScope.personType),
+        getPersonAttendance(currentScope.personId, CALENDAR_LEAVE_WINDOW),
+        getUpcomingBirthdays(CALENDAR_BIRTHDAY_WINDOW),
+        getPersonalCalendar(currentScope.personId, currentScope.personType),
+      ]);
 
     if (id !== requestId.current) return;
 
@@ -105,7 +115,14 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
       failed.push('birthdays');
     }
 
-    if (failed.length < 3) anySuccessRef.current = true;
+    if (personalResult.status === 'fulfilled') {
+      const data = personalResult.value.data;
+      setPersonalItems(Array.isArray(data) ? data : []);
+    } else {
+      failed.push('personal');
+    }
+
+    if (failed.length < 4) anySuccessRef.current = true;
 
     setFailedSources(failed);
     setError(failed.length === 3 && !anySuccessRef.current);
@@ -140,9 +157,10 @@ export function useCalendar(scope: CalendarScope | null): CalendarData {
         tasks,
         absenceDates,
         birthdays,
+        personalItems,
         today,
       }),
-    [tasks, absenceDates, birthdays, today]
+    [tasks, absenceDates, birthdays, personalItems, today]
   );
 
   return {

@@ -88,7 +88,14 @@ export default function HomeScreen() {
 
   const localToday = localTodayIso();
   const calendarIndex = useMemo(
-    () => buildCalendarIndex({ tasks, absenceDates: [], birthdays, today: localToday }),
+    () =>
+      buildCalendarIndex({
+        tasks,
+        absenceDates: [],
+        birthdays,
+        personalItems: [],
+        today: localToday,
+      }),
     [tasks, birthdays, localToday]
   );
   const calendarSummary = useMemo(() => {
@@ -361,6 +368,7 @@ export default function HomeScreen() {
         <TodayWorkSection
           tasks={todayTasks}
           todayIso={todayIso}
+          upcomingTasks={upcomingTasks}
           error={tasksError}
           onRetry={reload}
           onViewAll={() => navigation.navigate('Tasks')}
@@ -392,14 +400,6 @@ export default function HomeScreen() {
           loading={supportLoading}
           onPress={() => navigation.navigate('Support')}
         />
-
-        {upcomingTasks.length > 0 && (
-          <UpcomingSection
-            tasks={upcomingTasks}
-            onView={() => navigation.navigate('Tasks')}
-            onSelectTask={openTask}
-          />
-        )}
 
         <Button
           variant="secondary"
@@ -602,6 +602,7 @@ function NeedsAttentionSection({
 function TodayWorkSection({
   tasks,
   todayIso,
+  upcomingTasks,
   error,
   onRetry,
   onViewAll,
@@ -609,14 +610,22 @@ function TodayWorkSection({
 }: {
   tasks: Task[];
   todayIso: string;
+  upcomingTasks: Task[];
   error: boolean;
   onRetry: () => void;
   onViewAll: () => void;
   onSelectTask: (taskId: string) => void;
 }) {
+  const showUpcoming = tasks.length === 0 && upcomingTasks.length > 0;
+  const displayTasks = showUpcoming ? upcomingTasks : tasks;
+
   return (
     <View style={styles.section}>
-      <SectionHeader title="Today's work" onAction={tasks.length > 0 ? onViewAll : undefined} actionLabel="View all" />
+      <SectionHeader
+        title={showUpcoming ? 'Upcoming work' : "Today's work"}
+        onAction={displayTasks.length > 0 ? onViewAll : undefined}
+        actionLabel="View all"
+      />
 
       {error ? (
         <View style={styles.inlineError}>
@@ -625,20 +634,22 @@ function TodayWorkSection({
             <Text style={styles.inlineErrorAction}>Retry</Text>
           </Pressable>
         </View>
-      ) : tasks.length === 0 ? (
+      ) : displayTasks.length === 0 ? (
         <View style={styles.emptyRow}>
           <MaterialCommunityIcons name="clipboard-text-outline" size={18} color={colors.textMuted} />
-          <Text style={styles.emptyText}>Nothing due today.</Text>
+          <Text style={styles.emptyText}>
+            {showUpcoming ? 'No upcoming work.' : 'Nothing due today.'}
+          </Text>
         </View>
       ) : (
         <View style={styles.taskList}>
-          {tasks.map((task, index) => (
+          {displayTasks.map((task, index) => (
             <Pressable
               key={task._id}
               onPress={() => onSelectTask(task._id)}
               style={({ pressed }) => [
                 styles.taskRow,
-                index < tasks.length - 1 && styles.rowDivider,
+                index < displayTasks.length - 1 && styles.rowDivider,
                 pressed && styles.rowPressed,
               ]}
               accessibilityRole="button"
@@ -648,7 +659,11 @@ function TodayWorkSection({
                 <Text style={styles.taskTitle} numberOfLines={1}>{task.title}</Text>
                 <Text style={styles.taskMeta} numberOfLines={1}>
                   {task.priority}
-                  {relativeDueLabel(task.deadline, todayIso) ? ` · ${relativeDueLabel(task.deadline, todayIso)}` : ''}
+                  {showUpcoming
+                    ? ` · ${formatShortDate(task.deadline?.slice(0, 10) ?? '')}`
+                    : relativeDueLabel(task.deadline, todayIso)
+                      ? ` · ${relativeDueLabel(task.deadline, todayIso)}`
+                      : ''}
                 </Text>
               </View>
               <StatusBadge status={task.status} />

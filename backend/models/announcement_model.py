@@ -49,3 +49,25 @@ def delete_announcement(announcement_id):
         return False
     result = db.announcements.delete_one({"_id": oid})
     return result.deleted_count > 0
+
+
+def update_announcement(announcement_id, content, topic=None):
+    """Replace the content/topic of one announcement. Returns True when updated."""
+    db = get_db()
+    if db is None:
+        return False
+    try:
+        oid = ObjectId(str(announcement_id))
+    except Exception:
+        return False
+    result = db.announcements.update_one(
+        {"_id": oid},
+        {
+            "$set": {
+                "content": (content or "").strip(),
+                "topic": (topic or "").strip(),
+                "updated_at": datetime.utcnow(),
+            }
+        },
+    )
+    return result.matched_count > 0

@@ -8,18 +8,21 @@ import { CALENDAR_KIND } from '../../utils/calendar';
 interface AgendaRowProps {
   item: CalendarDayItem;
   onPress: (item: CalendarDayItem) => void;
+  /** Long-press action, offered for personal notes so they can be deleted. */
+  onLongPress?: (item: CalendarDayItem) => void;
   /** Hides the hairline on the final row of a group. */
   isLast?: boolean;
 }
 
 /** One calendar item: tinted icon tile, title, secondary line, disclosure. */
-function AgendaRow({ item, onPress, isLast = false }: AgendaRowProps) {
+function AgendaRow({ item, onPress, onLongPress, isLast = false }: AgendaRowProps) {
   const kind = CALENDAR_KIND[item.kind];
   const label = item.detail ? `${item.title}. ${item.meta}. ${item.detail}` : `${item.title}. ${item.meta}`;
 
   return (
     <Pressable
       onPress={() => onPress(item)}
+      onLongPress={onLongPress ? () => onLongPress(item) : undefined}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       accessibilityRole='button'
       accessibilityLabel={label}>
@@ -34,7 +37,11 @@ function AgendaRow({ item, onPress, isLast = false }: AgendaRowProps) {
           {item.meta}
         </Text>
       </View>
-      <MaterialCommunityIcons name='chevron-right' size={20} color={colors.textMuted} />
+      {item.kind === 'personal' && onLongPress ? (
+        <MaterialCommunityIcons name='delete-outline' size={18} color={colors.textMuted} />
+      ) : (
+        <MaterialCommunityIcons name='chevron-right' size={20} color={colors.textMuted} />
+      )}
       {!isLast ? <View style={styles.divider} /> : null}
     </Pressable>
   );

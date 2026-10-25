@@ -4,6 +4,8 @@ import {
   getAnnouncementPermission,
   getAnnouncements,
   sendAnnouncement,
+  deleteAnnouncement,
+  updateAnnouncement,
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useRealtime } from '../context/RealtimeContext';
@@ -29,6 +31,12 @@ export interface AnnouncementData {
   refresh: () => void;
   syncPermission: () => void;
   publish: (topic: string, content: string) => Promise<{ ok: boolean; message?: string }>;
+  removeAnnouncement: (announcementId: string) => Promise<boolean>;
+  editAnnouncement: (
+    announcementId: string,
+    topic: string,
+    content: string
+  ) => Promise<{ ok: boolean; message?: string }>;
 }
 
 export function useAnnouncement(): AnnouncementData {
@@ -147,6 +155,52 @@ export function useAnnouncement(): AnnouncementData {
     }
   }, [personId, personTypeValue]);
 
+  const removeAnnouncement = useCallback(
+    async (announcementId: string): Promise<boolean> => {
+      try {
+        await deleteAnnouncement(announcementId);
+        setAnnouncements(prev => prev.filter(item => item._id !== announcementId));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
+  const editAnnouncement = useCallback(
+    async (
+      announcementId: string,
+      topic: string,
+      content: string
+    ): Promise<{ ok: boolean; message?: string }> => {
+      const trimmedTopic = topic.trim();
+      const trimmed = content.trim();
+      if (!trimmed) {
+        return { ok: false, message: 'Announcement cannot be empty.' };
+      }
+      setSending(true);
+      try {
+        const res = await updateAnnouncement(announcementId, { topic: trimmedTopic, content: trimmed });
+        const updated = res.data?.announcement;
+        if (updated && updated._id) {
+          setAnnouncements(prev =>
+            prev.map(item => (item._id === updated._id ? updated : item))
+          );
+        }
+        return { ok: true };
+      } catch (err) {
+        const axiosErr = err as AxiosError<{ error?: string }>;
+        const message =
+          axiosErr.response?.data?.error ?? 'Failed to update. Check your connection and try again.';
+        return { ok: false, message };
+      } finally {
+        setSending(false);
+      }
+    },
+    []
+  );
+
   // The backend broadcasts this event after publishing, so a screen that is
   // already open reloads itself instead of waiting for a manual pull.
   const { subscribe } = useRealtime();
@@ -176,5 +230,7 @@ export function useAnnouncement(): AnnouncementData {
     refresh,
     syncPermission,
     publish,
+    removeAnnouncement,
+    editAnnouncement,
   };
 }

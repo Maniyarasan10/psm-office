@@ -30,6 +30,7 @@ from backend.routes.finance_routes import finance_bp
 from backend.routes.backup_routes import backup_bp
 from backend.routes.support_routes import support_bp
 from backend.routes.notification_routes import notification_bp
+from backend.routes.personal_calendar_routes import personal_calendar_bp
 from backend.utils.photo_utils import (
     store_photo,
     get_photo,
@@ -204,6 +205,7 @@ def create_app():
     app.register_blueprint(backup_bp)
     app.register_blueprint(support_bp)
     app.register_blueprint(notification_bp)
+    app.register_blueprint(personal_calendar_bp)
 
     get_db()
     migrate_photos_to_storage()

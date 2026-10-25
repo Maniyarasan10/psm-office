@@ -6,16 +6,22 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
+  Alert,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { CalendarDayItem, CalendarItemKind, CalendarStackParamList } from '../types';
+import { CalendarDayItem, CalendarItemKind, CalendarStackParamList, PersonalCalendarItem } from '../types';
 import { colors, spacing, radius, typography } from '../theme';
 import { Header } from '../components/ui/header';
 import { IconButton } from '../components/ui/icon-button';
+import { Button } from '../components/ui/button';
+import { Modal } from '../components/ui/modal';
+import { Input } from '../components/ui/input';
 import EmptyState from '../components/ui/empty-state';
 import { ErrorState } from '../components/ui/error-state';
 import { SkeletonLoader } from '../components/ui/skeleton-loader';
@@ -41,6 +47,7 @@ import {
   monthKeyOf,
   todayIso,
 } from '../utils/leave';
+import { createPersonalCalendarItem, deletePersonalCalendarItem, updatePersonalCalendarItem } from '../services/api';
 
 type CalendarNav = NativeStackNavigationProp<CalendarStackParamList, 'CalendarHome'>;
 
@@ -57,6 +64,75 @@ export default function CalendarHomeScreen() {
 
   const [monthKey, setMonthKey] = useState<string>(() => monthKeyOf(todayIso()));
   const [selected, setSelected] = useState<string>(() => todayIso());
+
+  // Personal note composer
+  const [addItemVisible, setAddItemVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<PersonalCalendarItem | null>(null);
+  const [itemForm, setItemForm] = useState({ title: '', notes: '', date: '' });
+  const [savingItem, setSavingItem] = useState(false);
+
+  const openAddItem = useCallback(() => {
+    setItemForm({ title: '', notes: '', date: selected });
+    setEditingItem(null);
+    setAddItemVisible(true);
+  }, [selected]);
+
+  const openEditItem = useCallback((item: PersonalCalendarItem) => {
+    setItemForm({ title: item.title, notes: item.notes ?? '', date: item.date });
+    setEditingItem(item);
+    setAddItemVisible(true);
+  }, []);
+
+  const closeItemModal = useCallback(() => {
+    setAddItemVisible(false);
+    setEditingItem(null);
+    setItemForm({ title: '', notes: '', date: '' });
+  }, []);
+
+  const submitItem = useCallback(async () => {
+    const { title, notes, date } = itemForm;
+    if (!title.trim()) return;
+    if (!date) return;
+    setSavingItem(true);
+    try {
+      if (editingItem?._id) {
+        await updatePersonalCalendarItem(editingItem._id, { title: title.trim(), notes, date });
+      } else {
+        await createPersonalCalendarItem({ title: title.trim(), notes, date });
+      }
+      closeItemModal();
+      void silentReload();
+    } catch {
+      // Surface nothing disruptive; retry via pull-to-refresh.
+    } finally {
+      setSavingItem(false);
+    }
+  }, [editingItem?._id, itemForm, closeItemModal, silentReload]);
+
+  const deleteItem = useCallback((itemId: string, title: string) => {
+    Alert.alert('Delete personal note', `Remove "${title}" from your calendar?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deletePersonalCalendarItem(itemId);
+            void silentReload();
+          } catch {
+            // Retry via pull-to-refresh.
+          }
+        },
+      },
+    ]);
+  }, [silentReload]);
+
+  const handleItemLongPress = useCallback((item: CalendarDayItem) => {
+    if (item.kind === 'personal') {
+      const itemId = item.id.replace(/^personal-/, '');
+      deleteItem(itemId, item.title);
+    }
+  }, [deleteItem]);
 
   const didFocusOnce = useRef(false);
   useFocusEffect(
@@ -274,6 +350,7 @@ export default function CalendarHomeScreen() {
                 key={item.id}
                 item={item}
                 onPress={openItem}
+                onLongPress={handleItemLongPress}
                 isLast={position === dayItems.length - 1}
               />
             ))}
@@ -308,6 +385,7 @@ export default function CalendarHomeScreen() {
                     key={item.id}
                     item={item}
                     onPress={openItem}
+                    onLongPress={handleItemLongPress}
                     isLast={position === group.items.length - 1}
                   />
                 ))}
@@ -315,7 +393,77 @@ export default function CalendarHomeScreen() {
             </View>
           ))
         )}
+        <Pressable
+          onPress={openAddItem}
+          style={styles.fab}
+          accessibilityRole="button"
+          accessibilityLabel="Add personal note">
+          <MaterialCommunityIcons name='plus' size={22} color={colors.textInverted} />
+        </Pressable>
       </ScrollView>
+
+      <Modal visible={addItemVisible} onClose={closeItemModal}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalInner}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {editingItem ? 'Edit note' : 'Add personal note'}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              A dated reminder only you can see on your calendar.
+            </Text>
+          </View>
+          <Input
+            label="Title"
+            value={itemForm.title}
+            onChangeText={title => setItemForm({ ...itemForm, title })}
+            placeholder="e.g. Doctor appointment"
+            maxLength={120}
+            containerStyle={styles.composeField}
+          />
+          <Input
+            label="Notes"
+            value={itemForm.notes}
+            onChangeText={notes => setItemForm({ ...itemForm, notes })}
+            placeholder="Add details..."
+            multiline
+            maxLength={500}
+            textAlignVertical="top"
+            containerStyle={styles.composeField}
+            style={styles.composeInput}
+          />
+          <Input
+            label="Date (YYYY-MM-DD)"
+            value={itemForm.date}
+            onChangeText={date => setItemForm({ ...itemForm, date })}
+            placeholder={todayIso()}
+            maxLength={10}
+            containerStyle={styles.composeField}
+          />
+          <View style={styles.modalActions}>
+            <Button
+              variant="secondary"
+              size="lg"
+              style={styles.modalButton}
+              onPress={closeItemModal}
+              disabled={savingItem}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="lg"
+              style={styles.modalButton}
+              onPress={submitItem}
+              loading={savingItem}
+              disabled={!itemForm.title.trim() || !itemForm.date}
+            >
+              {editingItem ? 'Save' : 'Add'}
+            </Button>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -513,5 +661,58 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     marginLeft: spacing.sm,
+  },
+  fab: {
+    position: 'absolute',
+    right: spacing.lg,
+    bottom: spacing.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    zIndex: 10,
+  },
+  modalInner: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  modalTitle: {
+    ...typography.subtitle,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  modalSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+  },
+  composeField: {
+    marginBottom: spacing.sm,
+  },
+  composeInput: {
+    minHeight: 120,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  modalButton: {
+    flex: 1,
   },
 });

@@ -298,55 +298,6 @@ export default function AttendanceScreen() {
         </View>
       )}
 
-      <SectionLabel title="Quick action" />
-      <View style={styles.actionBlock}>
-        {actionError && (
-          <View style={styles.actionError}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
-            <Text style={styles.actionErrorText}>{actionError}</Text>
-          </View>
-        )}
-
-        {stateKind === 'checked-out' ? (
-          <ActionNotice
-            icon="check-circle-outline"
-            tone="success"
-            title="Workday complete"
-            message={`You checked out at ${format12Hour(todayRecord?.clock_out)}.`}
-          />
-        ) : stateKind === 'absent' ? (
-          <ActionNotice
-            icon="close-circle-outline"
-            tone="error"
-            title="Marked absent"
-            message="No check-in is available for today."
-          />
-        ) : (
-          <>
-            <Button
-              variant="primary"
-              size="lg"
-              loading={submitting}
-              onPress={stateKind === 'working' ? () => setShowOutConfirm(true) : handleCheckIn}
-              accessibilityLabel={stateKind === 'working' ? 'Check out' : 'Check in'}
-            >
-              {stateKind === 'working' ? 'Check Out' : 'Check In'}
-            </Button>
-            {stateKind === 'not-checked-in' && (
-              <Button
-                variant="ghost"
-                size="md"
-                onPress={() => navigation.navigate('Camera')}
-                style={styles.gpsButton}
-                accessibilityLabel="Check in with location"
-              >
-                Check in with location
-              </Button>
-            )}
-          </>
-        )}
-      </View>
-
       <SectionLabel title="Current status" />
       <View style={styles.card}>
         <View style={styles.statusTopRow}>
@@ -553,6 +504,56 @@ export default function AttendanceScreen() {
         onRightPress={refresh}
         showShadow
       />
+
+      {/* Check-in is the first, most prominent action and stays fixed at the top. */}
+      <View style={styles.topCard}>
+        {actionError && (
+          <View style={styles.actionError}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
+            <Text style={styles.actionErrorText}>{actionError}</Text>
+          </View>
+        )}
+
+        {stateKind === 'checked-out' ? (
+          <ActionNotice
+            icon="check-circle-outline"
+            tone="success"
+            title="Workday complete"
+            message={`You checked out at ${format12Hour(todayRecord?.clock_out)}.`}
+          />
+        ) : stateKind === 'absent' ? (
+          <ActionNotice
+            icon="close-circle-outline"
+            tone="error"
+            title="Marked absent"
+            message="No check-in is available for today."
+          />
+        ) : (
+          <>
+            <Button
+              variant="primary"
+              size="lg"
+              loading={submitting}
+              onPress={stateKind === 'working' ? () => setShowOutConfirm(true) : handleCheckIn}
+              accessibilityLabel={stateKind === 'working' ? 'Check out' : 'Check in'}
+              style={styles.checkInButton}
+            >
+              {stateKind === 'working' ? 'Check Out' : 'Check In'}
+            </Button>
+            {stateKind === 'not-checked-in' && (
+              <Button
+                variant="ghost"
+                size="md"
+                onPress={() => navigation.navigate('Camera')}
+                style={styles.gpsButton}
+                accessibilityLabel="Check in with location"
+              >
+                Check in with location
+              </Button>
+            )}
+          </>
+        )}
+      </View>
 
       <FlatList
         data={monthRecords}
@@ -876,8 +877,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: spacing.xs,
   },
-  actionBlock: {
-    marginTop: 0,
+  topCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  checkInButton: {
+    width: '100%',
+    marginTop: spacing.sm,
   },
   actionError: {
     flexDirection: 'row',

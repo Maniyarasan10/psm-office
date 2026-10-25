@@ -15,6 +15,7 @@ import {
   SupportTicket,
   BirthdayEntry,
   Announcement,
+  PersonalCalendarItem,
 } from '../types';
 import ENV from '../config/env';
 import type { ServerNotification } from '../notifications/types';
@@ -233,6 +234,28 @@ export const createProjectTask = (
 export const getUpcomingBirthdays = (days: number = 30): Promise<AxiosResponse<BirthdayEntry[]>> =>
   api.get('/employees/birthdays', { params: { days } });
 
+export const getPersonalCalendar = (
+  personId: string,
+  personType: string = 'employee'
+): Promise<AxiosResponse<PersonalCalendarItem[]>> =>
+  api.get('/personal-calendar', { params: { person_id: personId, person_type: personType } });
+
+export const createPersonalCalendarItem = (
+  payload: { title: string; notes?: string; date: string }
+): Promise<AxiosResponse<PersonalCalendarItem>> =>
+  api.post('/personal-calendar', payload);
+
+export const updatePersonalCalendarItem = (
+  itemId: string,
+  payload: { title: string; notes?: string; date: string }
+): Promise<AxiosResponse<{ message: string }>> =>
+  api.put(`/personal-calendar/${itemId}`, payload);
+
+export const deletePersonalCalendarItem = (
+  itemId: string
+): Promise<AxiosResponse<{ message: string }>> =>
+  api.delete(`/personal-calendar/${itemId}`);
+
 export const getAnnouncements = (): Promise<AxiosResponse<{ announcement: string; topic?: string; announcements?: Announcement[] }>> =>
   api.get('/announcements');
 
@@ -251,6 +274,17 @@ export const sendAnnouncement = (
   personType: string = 'employee'
 ): Promise<AxiosResponse<{ message: string; announcement?: Announcement }>> =>
   api.post('/announcements', { topic, content, person_id: personId, person_type: personType });
+
+export const deleteAnnouncement = (
+  announcementId: string
+): Promise<AxiosResponse<{ message: string }>> =>
+  api.delete(`/announcements/${announcementId}`);
+
+export const updateAnnouncement = (
+  announcementId: string,
+  payload: { topic: string; content: string }
+): Promise<AxiosResponse<{ message: string; announcement?: Announcement }>> =>
+  api.put(`/announcements/${announcementId}`, payload);
 
 export const updatePushToken = (pushToken: string, employeeId: string, personType: string = 'employee'): Promise<AxiosResponse<{ status: string }>> =>
   api.post('/update-push-token', { pushToken, employeeId, personType });

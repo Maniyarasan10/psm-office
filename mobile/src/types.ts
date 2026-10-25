@@ -317,7 +317,7 @@ export interface Announcement {
 }
 
 /** The dated information the calendar can show from existing backend data. */
-export type CalendarItemKind = 'leave' | 'task' | 'birthday';
+export type CalendarItemKind = 'leave' | 'task' | 'birthday' | 'personal';
 
 /**
  * A single dated item on the calendar. Every backend source the calendar
@@ -344,6 +344,16 @@ export type CalendarStackParamList = {
   CalendarHome: undefined;
   CalendarItem: { item: CalendarDayItem };
 };
+
+/** A personal note/reminder owned by the signed-in person. */
+export interface PersonalCalendarItem {
+  _id: string;
+  title: string;
+  notes?: string;
+  date: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export type RootStackParamList = {
   Login: undefined;

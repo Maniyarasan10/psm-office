@@ -1,4 +1,4 @@
-import { BirthdayEntry, CalendarDayItem, CalendarItemKind, Task } from '../types';
+import { BirthdayEntry, CalendarDayItem, CalendarItemKind, PersonalCalendarItem, Task } from '../types';
 import { colors } from '../theme';
 import { addDays, addMonths, dayDiff, formatDateField, formatDateLong, monthKeyOf, todayIso } from './leave';
 import { deadlinePart, dueInfo, isOpenTask } from './tasks';
@@ -53,9 +53,16 @@ export const CALENDAR_KIND: Record<CalendarItemKind, CalendarKindMeta> = {
     color: colors.warning,
     tint: colors.warningLight,
   },
+  personal: {
+    label: 'Personal note',
+    legend: 'Personal',
+    icon: 'note-outline',
+    color: colors.info,
+    tint: colors.infoLight,
+  },
 };
 
-const KIND_ORDER: Record<CalendarItemKind, number> = { leave: 0, task: 1, birthday: 2 };
+const KIND_ORDER: Record<CalendarItemKind, number> = { leave: 0, task: 1, birthday: 2, personal: 3 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -73,6 +80,8 @@ export interface CalendarIndexInput {
   /** YYYY-MM-DD dates whose attendance status is "Absent". */
   absenceDates: string[];
   birthdays: BirthdayEntry[];
+  /** Personal notes owned by the signed-in person. */
+  personalItems: PersonalCalendarItem[];
   today: string;
 }
 
@@ -188,6 +197,20 @@ export function buildCalendarIndex(input: CalendarIndexInput): CalendarIndex {
     });
   });
 
+  // Personal notes: dated reminders owned by the signed-in person.
+  input.personalItems.forEach(item => {
+    const date = item.date;
+    if (!ISO_DATE.test(date)) return;
+    push({
+      id: `personal-${item._id}`,
+      kind: 'personal',
+      date,
+      title: item.title,
+      meta: item.notes ? 'Personal note' : 'Personal reminder',
+      detail: item.notes || undefined,
+    });
+  });
+
   ordered.sort(compareItems);
   byDate.forEach(items => items.sort(compareItems));
 
@@ -263,6 +286,7 @@ const KIND_SPOKEN: Record<CalendarItemKind, string> = {
   leave: 'leave',
   task: 'deadline',
   birthday: 'birthday',
+  personal: 'personal note',
 };
 
 /**

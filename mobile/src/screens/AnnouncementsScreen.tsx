@@ -1,5 +1,15 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  Alert,
+  Pressable,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,13 +27,30 @@ import { useBackButton } from '../hooks/useBackButton';
 import { announcementDayLabel, announcementTimeLabel } from '../utils/announcements';
 
 export default function AnnouncementsScreen() {
-  const { announcements, loading, refreshing, error, reload, refresh, canSend, sending, publish, syncPermission } =
-    useAnnouncement();
+  const {
+    announcements,
+    loading,
+    refreshing,
+    error,
+    reload,
+    refresh,
+    canSend,
+    sending,
+    publish,
+    syncPermission,
+    removeAnnouncement,
+    editAnnouncement,
+  } = useAnnouncement();
   const goBack = useBackButton();
   const [composeVisible, setComposeVisible] = useState(false);
   const [topic, setTopic] = useState('');
   const [content, setContent] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string>('');
+  const [editTopic, setEditTopic] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
   const now = Date.now();
 
   useFocusEffect(
@@ -57,6 +84,63 @@ export default function AnnouncementsScreen() {
       setSubmitError(res.message ?? 'Failed to publish.');
     }
   }, [content, publish, topic]);
+
+  const openEdit = useCallback((item: (typeof announcements)[number]) => {
+    setEditingId(item._id);
+    setEditTopic(item.topic?.trim() || '');
+    setEditContent(item.content);
+    setEditError(null);
+    setEditVisible(true);
+  }, [announcements]);
+
+  const closeEdit = useCallback(() => {
+    setEditVisible(false);
+    setEditingId('');
+    setEditTopic('');
+    setEditContent('');
+    setEditError(null);
+  }, []);
+
+  const submitEdit = useCallback(async () => {
+    if (!editingId) return;
+    const res = await editAnnouncement(editingId, editTopic, editContent);
+    if (res.ok) {
+      setEditError(null);
+      closeEdit();
+    } else {
+      setEditError(res.message ?? 'Failed to update.');
+    }
+  }, [editingId, editTopic, editContent, editAnnouncement, closeEdit]);
+
+  const handleLongPress = useCallback((item: (typeof announcements)[number]) => {
+    if (!canSend) return;
+    Alert.alert('Announcement', `What would you like to do with "${item.topic?.trim() || 'this announcement'}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Edit',
+        style: 'default',
+        onPress: () => openEdit(item),
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const confirmed = await new Promise<boolean>(resolve => {
+            Alert.alert('Delete announcement', 'Remove this announcement for everyone?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+            ]);
+          });
+          if (confirmed) {
+            const ok = await removeAnnouncement(item._id);
+            if (!ok) {
+              Alert.alert('Delete failed', 'Could not remove this announcement. Try again.');
+            }
+          }
+        },
+      },
+    ]);
+  }, [canSend, openEdit, removeAnnouncement]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -94,7 +178,13 @@ export default function AnnouncementsScreen() {
         ) : (
           <View style={styles.list}>
             {announcements.map(item => (
-              <View style={styles.announcement} key={item._id}>
+              <Pressable
+                onLongPress={() => handleLongPress(item)}
+                style={styles.announcement}
+                key={item._id}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.topic?.trim() || 'Announcement'}, by ${item.author_name ?? 'office'}`}
+              >
                 <View style={styles.announcementHeader}>
                   <View style={styles.iconCircle}>
                     <MaterialCommunityIcons name="bullhorn" size={22} color={colors.primary} />
@@ -110,11 +200,20 @@ export default function AnnouncementsScreen() {
                   <View style={styles.timeTag}>
                     <Text style={styles.timeTagDay}>{announcementDayLabel(item.created_at, now)}</Text>
                     <Text style={styles.timeTagTime}>{announcementTimeLabel(item.created_at)}</Text>
+                    {canSend && (
+                      <MaterialCommunityIcons
+                        name='dots-vertical'
+                        size={18}
+                        color={colors.textMuted}
+                        style={styles.optionsIcon}
+                        accessibilityLabel='Edit or delete'
+                      />
+                    )}
                   </View>
                 </View>
 
                 <Text style={styles.announcementBody}>{item.content}</Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}
@@ -178,6 +277,58 @@ export default function AnnouncementsScreen() {
               disabled={!topic.trim() || !content.trim()}
             >
               Publish
+            </Button>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={editVisible} onClose={closeEdit}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalInner}
+        >
+          <Text style={styles.modalTitle}>Edit announcement</Text>
+          <Text style={styles.modalSubtitle}>
+            Changes are sent to everyone who received the original message.
+          </Text>
+          <Input
+            label="Topic"
+            value={editTopic}
+            onChangeText={setEditTopic}
+            placeholder="Announcement topic"
+            maxLength={120}
+            containerStyle={styles.composeField}
+          />
+          <Input
+            label="Message"
+            value={editContent}
+            onChangeText={setEditContent}
+            placeholder="Write your announcement..."
+            multiline
+            maxLength={1000}
+            textAlignVertical="top"
+            containerStyle={styles.composeField}
+            style={styles.composeInput}
+          />
+          {editError ? <Text style={styles.submitError}>{editError}</Text> : null}
+          <View style={styles.modalActions}>
+            <Button
+              variant="secondary"
+              size="lg"
+              style={styles.modalButton}
+              onPress={closeEdit}
+              disabled={sending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="lg"
+              style={styles.modalButton}
+              onPress={submitEdit}
+              loading={sending}
+              disabled={!editContent.trim()}
+            >
+              Save
             </Button>
           </View>
         </KeyboardAvoidingView>
@@ -275,6 +426,9 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  optionsIcon: {
+    marginLeft: spacing.sm,
   },
   skeleton: {
     gap: spacing.xs,
