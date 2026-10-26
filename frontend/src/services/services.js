@@ -278,6 +278,20 @@ export const addSupportResponse = (ticketId, formData) =>
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 
+/** Direct link that downloads one support attachment (cookie-auth redirect). */
+export const supportAttachmentUrl = (attachmentId) =>
+  `${HOST}/api/support/attachments/${attachmentId}/download`;
+
+/** Absolute URL for inline attachment previews (signed path or CDN URL). */
+export const supportAttachmentFileUrl = (fileUrl) => {
+  if (!fileUrl) return null;
+  if (typeof fileUrl !== 'string') return null;
+  if (fileUrl.startsWith('data:')) return fileUrl;
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
+  if (fileUrl.startsWith('/')) return `${HOST}${fileUrl}`;
+  return fileUrl;
+};
+
 export const getLeaveStats = () =>
   api.get('/leave/stats');
 

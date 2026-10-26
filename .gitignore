@@ -9,6 +9,7 @@
 *.p12
 *.keystore
 keystore.properties
+*KEYSTORE-CREDENTIALS*
 service-account*.json
 google-service-account-key.json
 firebase-admin.json

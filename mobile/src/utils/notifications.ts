@@ -51,6 +51,8 @@ export function categoryLabel(route?: NotificationRoute | null): string {
       return 'Support request';
     case 'work':
       return 'Projects';
+    case 'reports':
+      return 'Work report';
     case 'home':
       return 'System';
     default:
@@ -73,6 +75,8 @@ export function categoryIcon(route?: NotificationRoute | null): string {
       return 'lifebuoy';
     case 'work':
       return 'briefcase-outline';
+    case 'reports':
+      return 'clipboard-text-outline';
     case 'home':
       return 'information-outline';
     default:
@@ -87,13 +91,15 @@ const ROUTE_TARGETS: Record<string, NotificationRouteTarget> = {
   task: 'tasks',
   leave: 'leave',
   attendance: 'attendance',
-  support: 'support',
-  work: 'work',
-  project: 'work',
-  projects: 'work',
-  home: 'home',
-  dashboard: 'home',
-};
+    support: 'support',
+    work: 'work',
+    project: 'work',
+    projects: 'work',
+    home: 'home',
+    dashboard: 'home',
+    report: 'reports',
+    reports: 'reports',
+  };
 
 // Resolves the deep-link target from a push payload's `data` map.
 // Returns null (no route) when the payload does not declare one.
@@ -108,6 +114,7 @@ export function resolveRouteFromData(data?: Record<string, unknown> | null): Not
   if (typeof data['taskId'] === 'string') route.taskId = data['taskId'];
   if (typeof data['announcementId'] === 'string') route.announcementId = data['announcementId'];
   if (typeof data['supportId'] === 'string') route.supportId = data['supportId'];
+  if (typeof data['reportId'] === 'string') route.reportId = data['reportId'];
   return route;
 }
 
@@ -139,6 +146,12 @@ export function navigateToNotificationRoute(
       return;
     case 'work':
       navigation.navigate('MainTabs', { screen: 'Work' });
+      return;
+    case 'reports':
+      navigation.navigate(
+        'SubmitReport',
+        route.reportId ? { reportId: route.reportId } : undefined
+      );
       return;
     case 'support':
       navigation.navigate(

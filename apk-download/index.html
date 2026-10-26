@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Download the PSM Office Android APK and install it on your device."
+    />
+    <title>PSM Office APK</title>
+    <style>
+      :root {
+        --paper: #eef7ff;
+        --paper-strong: #dfeeff;
+        --ink: #112b4d;
+        --ink-soft: #1d3e6d;
+        --olive: #315f91;
+        --accent: #3c97ff;
+        --accent-soft: #9bd5ff;
+        --panel: #0d2343;
+        --panel-2: #143b70;
+        --line: rgba(17, 43, 77, 0.14);
+        --shadow: rgba(12, 35, 67, 0.2);
+        --success: #dfeeff;
+        --danger: #dfeafc;
+      }
+
+      * { box-sizing: border-box; }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(60, 151, 255, 0.18), transparent 30%),
+          linear-gradient(180deg, #f7fbff 0%, var(--paper) 100%);
+        color: var(--ink);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      img {
+        max-width: 100%;
+        display: block;
+      }
+
+      .container {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .site-header {
+        padding: 22px 0 12px;
+      }
+
+      .header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 10px 0;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        object-fit: contain;
+        border-radius: 10px;
+      }
+
+      .brand-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .brand-name {
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .brand-label {
+        color: var(--olive);
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .release-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid rgba(17, 43, 77, 0.14);
+        border-radius: 999px;
+        background: rgba(255,255,255,0.52);
+        padding: 0.7rem 1rem;
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+
+      .release-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 5px rgba(60, 151, 255, 0.18);
+      }
+
+      .hero {
+        padding: 20px 0 20px;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+        gap: 28px;
+        align-items: center;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        color: var(--olive);
+        text-transform: uppercase;
+        margin-bottom: 1.1rem;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 32px;
+        height: 1px;
+        background: rgba(17, 43, 77, 0.33);
+      }
+
+      h1 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-weight: 700;
+        font-size: clamp(3rem, 5vw, 5.3rem);
+        line-height: 0.96;
+        letter-spacing: -0.06em;
+      }
+
+      .hero-copy {
+        margin-top: 1.15rem;
+        max-width: 560px;
+        font-size: 1.08rem;
+        line-height: 1.7;
+        color: rgba(17, 43, 77, 0.8);
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 1.6rem;
+      }
+
+      .meta-item {
+        display: inline-flex;
+        height: 38px;
+        align-items: center;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.38);
+        border: 1px solid var(--line);
+        font-size: 0.8rem;
+        color: var(--ink-soft);
+      }
+
+      .meta-item strong {
+        font-weight: 700;
+        margin-right: 6px;
+      }
+
+      .workday-signature {
+        display: grid;
+        grid-template-columns: repeat(3, max-content);
+        gap: clamp(12px, 2.2vw, 28px);
+        align-items: center;
+        width: fit-content;
+        max-width: 100%;
+        margin-top: 1.45rem;
+        padding: 0.8rem 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        color: var(--olive);
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+      }
+
+      .workday-signature span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .workday-signature span::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        background: var(--accent);
+        border: 1px solid var(--ink);
+        transform: rotate(45deg);
+      }
+
+      .download-panel {
+        position: relative;
+        background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+        color: #f4f8ff;
+        border-radius: 28px;
+        padding: clamp(1.2rem, 2vw, 1.8rem);
+        box-shadow: 0 24px 48px rgba(12, 35, 67, 0.2);
+        border: 1px solid rgba(255,255,255,0.08);
+      }
+
+      .panel-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 1rem;
+      }
+
+      .panel-kicker {
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(244, 248, 255, 0.72);
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.42rem 0.72rem;
+        border-radius: 999px;
+        background: rgba(60, 151, 255, 0.12);
+        border: 1px solid rgba(60, 151, 255, 0.28);
+        color: var(--accent-soft);
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .status-pill::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .status-pill.missing {
+        background: rgba(154, 196, 255, 0.12);
+        border-color: rgba(154, 196, 255, 0.2);
+        color: #dfeeff;
+      }
+
+      .status-pill.missing::before {
+        background: #dfeeff;
+      }
+
+      .apk-title {
+        margin: 0.7rem 0 0.1rem;
+        color: rgba(255,255,255,0.92);
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .apk-file {
+        margin: 0;
+        font-size: clamp(1.75rem, 2.2vw, 2.3rem);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+      }
+
+      .apk-sub {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding-top: 1rem;
+        margin-top: 1rem;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        color: rgba(244, 248, 255, 0.78);
+        font-size: 0.86rem;
+      }
+
+      .download-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        margin-top: 1.4rem;
+        border: 0;
+        border-radius: 14px;
+        padding: 1rem 1.2rem;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 700;
+        background: linear-gradient(180deg, #1769c2 0%, #135caf 100%);
+        color: #f5faff;
+        box-shadow: 0 14px 26px rgba(60, 151, 255, 0.22);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        cursor: pointer;
+      }
+
+      .download-action:hover,
+      .download-action:focus-visible {
+        transform: translateY(-1px);
+        box-shadow: 0 18px 26px rgba(60, 151, 255, 0.28);
+        filter: brightness(1.04);
+      }
+
+      .download-action:focus-visible,
+      .secondary-link:focus-visible,
+      .step-link:focus-visible {
+        outline: 3px solid rgba(155, 213, 255, 0.75);
+        outline-offset: 3px;
+      }
+
+      .download-action.is-disabled,
+      .download-action:disabled {
+        background: rgba(148, 154, 149, 0.2);
+        color: rgba(255,255,255,0.7);
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .download-action:disabled:hover {
+        transform: none;
+        filter: none;
+      }
+
+      .helper-copy {
+        margin-top: 1rem;
+        line-height: 1.6;
+        color: rgba(244, 248, 255, 0.8);
+        font-size: 0.96rem;
+      }
+
+      .helper-copy strong {
+        color: #f3f9ff;
+      }
+
+      .trust {
+        padding: 40px 0 10px;
+      }
+
+      .trust-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .trust-item {
+        border-right: 1px solid var(--line);
+        padding: 1rem 1.1rem;
+      }
+
+      .trust-item:first-child {
+        padding-left: 0;
+      }
+
+      .trust-item:last-child {
+        border-right: 0;
+      }
+
+      .trust-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--olive);
+      }
+
+      .trust-value {
+        margin-top: 0.5rem;
+        font-weight: 700;
+        font-size: 1rem;
+      }
+
+      .process {
+        padding: 48px 0 16px;
+      }
+
+      .section-heading {
+        margin: 0 0 1.3rem;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(2rem, 2vw + 1.2rem, 3rem);
+        line-height: 1.08;
+        letter-spacing: -0.05em;
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .step-card {
+        background: rgba(255,255,255,0.46);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 1.3rem 1.2rem 1.15rem;
+      }
+
+      .step-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--panel);
+        color: var(--accent-soft);
+        font-weight: 700;
+        margin-bottom: 1rem;
+      }
+
+      .step-title {
+        margin: 0 0 0.5rem;
+        font-size: 1.2rem;
+      }
+
+      .step-copy {
+        margin: 0;
+        line-height: 1.65;
+        color: rgba(17, 43, 77, 0.78);
+      }
+
+      .install-section {
+        padding-top: 24px;
+      }
+
+      .install-box {
+        background: rgba(255,255,255,0.4);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 1.35rem 1.4rem;
+      }
+
+      .install-box h3 {
+        margin: 0 0 0.8rem;
+        font-size: 1.2rem;
+      }
+
+      .employee-note {
+        margin-top: 1rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--accent);
+        border-radius: 4px 14px 14px 4px;
+        background: rgba(155, 213, 255, 0.16);
+      }
+
+      .employee-note h3 {
+        margin: 0 0 0.45rem;
+        font-size: 1rem;
+      }
+
+      .employee-note p {
+        margin: 0;
+        color: rgba(17, 43, 77, 0.84);
+        line-height: 1.65;
+      }
+
+      .install-list {
+        margin: 0;
+        padding-left: 1.2rem;
+        color: rgba(17, 43, 77, 0.8);
+        line-height: 1.8;
+      }
+
+      .site-footer {
+        padding: 44px 0 80px;
+      }
+
+      .footer-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 18px;
+        padding-top: 1.2rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.82rem;
+        color: rgba(17, 43, 77, 0.7);
+      }
+
+      .secondary-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+
+      @media (max-width: 760px) {
+        .header-row {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .hero-grid,
+        .steps,
+        .trust-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .workday-signature {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .trust-item,
+        .trust-item:first-child {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          padding: 0.9rem 0;
+        }
+
+        .trust-item:last-child {
+          border-bottom: 0;
+        }
+
+        .footer-meta {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation: none !important;
+          transition: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-row">
+        <div class="brand" aria-label="PSM Office">
+          <img class="brand-mark" src="ce.png" alt="PSM Office logo" />
+          <div class="brand-copy">
+            <div class="brand-name">PSM Office</div>
+            <div class="brand-label">Android release</div>
+          </div>
+        </div>
+
+        <div class="release-badge" aria-label="Android release label">
+          <span class="release-dot" aria-hidden="true"></span>
+          Android APK
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-grid">
+          <div>
+            <div class="eyebrow">Workforce tools</div>
+            <h1 id="hero-title">Your workday, in your pocket.</h1>
+            <p class="hero-copy">
+              Install the PSM Office app on Android to check schedules, update attendance,
+              access work details, and stay connected wherever the day takes you.
+            </p>
+
+            <div class="workday-signature" aria-hidden="true">
+              <span>Shift</span>
+              <span>Attendance</span>
+              <span>Work details</span>
+            </div>
+
+            <div class="meta-row" aria-label="Release details">
+              <span class="meta-item"><strong>App</strong> PSM Office</span>
+              <span class="meta-item"><strong>Platform</strong> Android</span>
+              <span class="meta-item"><strong>Package</strong> com.psm.office</span>
+            </div>
+          </div>
+
+          <aside class="download-panel" aria-labelledby="download-title">
+            <div class="panel-top">
+              <span class="panel-kicker">Release build</span>
+              <span class="status-pill missing" data-status-pill>File missing</span>
+            </div>
+
+            <h2 class="apk-title" id="download-title">APK file</h2>
+            <p class="apk-file">psm-office.apk</p>
+
+            <div class="apk-sub">
+              <span>Android</span>
+              <span>•</span>
+              <span>Package: com.psm.office</span>
+              <span>•</span>
+              <span data-file-size>Size unavailable</span>
+            </div>
+
+            <button
+              class="download-action is-disabled"
+              type="button"
+              data-download-action
+              disabled
+            >
+              Download APK
+            </button>
+
+            <p class="helper-copy" data-helper-text>
+              <strong>Before deployment:</strong> place <code>psm-office.apk</code> next to
+              <code>index.html</code> in this folder. The download link remains unavailable until the file is published.
+            </p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="trust" aria-label="Compatibility and trust details">
+        <div class="trust-grid">
+          <article class="trust-item">
+            <div class="trust-label">Supports</div>
+            <div class="trust-value">Android</div>
+          </article>
+          <article class="trust-item">
+            <div class="trust-label">Package</div>
+            <div class="trust-value">com.psm.office</div>
+          </article>
+          <article class="trust-item">
+            <div class="trust-label">Install</div>
+            <div class="trust-value">APK file</div>
+          </article>
+          <article class="trust-item">
+            <div class="trust-label">Hosting</div>
+            <div class="trust-value">Static site</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="process" aria-labelledby="process-title">
+        <h2 class="section-heading" id="process-title">Get started</h2>
+
+        <div class="steps">
+          <article class="step-card">
+            <div class="step-number">1</div>
+            <h3 class="step-title">Download</h3>
+            <p class="step-copy">
+              Tap “Download APK” and save the file to your device.
+            </p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-number">2</div>
+            <h3 class="step-title">Open APK</h3>
+            <p class="step-copy">
+              Tap the file in your browser or Files app to begin installation.
+            </p>
+          </article>
+
+          <article class="step-card">
+            <div class="step-number">3</div>
+            <h3 class="step-title">Install &amp; sign in</h3>
+            <p class="step-copy">
+              Allow installation from the browser or device settings, then sign in with your usual PSM Office account.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="install-section" aria-labelledby="install-title">
+        <div class="install-box">
+          <h3 id="install-title">Install note</h3>
+          <ul class="install-list">
+            <li>On Android, your device may ask to allow apps from this source or the Files app.</li>
+            <li>Review the permissions and continue only if the request matches the PSM Office app.</li>
+            <li>After installation, open the app and sign in with your valid PSM Office account.</li>
+          </ul>
+        </div>
+
+        <aside class="employee-note" aria-labelledby="employee-note-title">
+          <h3 id="employee-note-title">Employee sign-in</h3>
+          <p>
+            After your account is created, check the email address you gave the office—including
+            spam or junk—for an account email containing your Employee ID and temporary password.
+            Sign in with those details, then change your password after your first login. If no
+            email arrives, verify your address with the office or admin and ask them to check
+            whether the credentials email was sent successfully.
+          </p>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-meta">
+        <span>PSM Office · Package: com.psm.office</span>
+        <span>Release page for Android APK distribution</span>
+      </div>
+    </footer>
+
+    <script>
+      (function () {
+        const downloadAction = document.querySelector('[data-download-action]');
+        const statusPill = document.querySelector('[data-status-pill]');
+        const fileSize = document.querySelector('[data-file-size]');
+        const helperText = document.querySelector('[data-helper-text]');
+
+        if (!downloadAction || !statusPill || !fileSize || !helperText) return;
+
+        const apkPath = 'psm-office.apk';
+
+        function markMissing() {
+          statusPill.classList.add('missing');
+          statusPill.textContent = 'File missing';
+          fileSize.textContent = 'Size unavailable';
+          helperText.innerHTML = '<strong>Before deployment:</strong> place <code>psm-office.apk</code> next to <code>index.html</code> in this folder. The download link remains unavailable until the file is published.';
+        }
+
+        function markUnverified() {
+          statusPill.classList.add('missing');
+          statusPill.textContent = 'Could not verify';
+          fileSize.textContent = 'Size unavailable';
+          helperText.textContent = 'Could not check for the APK. Check your connection and reload this page.';
+        }
+
+        function formatBytes(bytes) {
+          if (!Number.isFinite(bytes) || bytes <= 0) return 'Size unavailable';
+          const units = ['B', 'KB', 'MB', 'GB'];
+          let value = bytes;
+          let unitIndex = 0;
+
+          while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex += 1;
+          }
+
+          return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+        }
+
+        async function checkDownloadState() {
+          try {
+            const response = await fetch(apkPath, { method: 'HEAD' });
+            if (!response.ok) {
+              if (response.status === 404) {
+                markMissing();
+              } else {
+                markUnverified();
+              }
+              return;
+            }
+
+            const length = response.headers.get('Content-Length');
+            const bytes = Number(length);
+
+            const downloadLink = document.createElement('a');
+            downloadLink.className = 'download-action';
+            downloadLink.href = apkPath;
+            downloadLink.download = 'psm-office.apk';
+            downloadLink.dataset.downloadAction = '';
+            downloadLink.textContent = 'Download APK';
+            downloadAction.replaceWith(downloadLink);
+            statusPill.classList.remove('missing');
+            statusPill.textContent = 'Ready';
+            fileSize.textContent = formatBytes(bytes);
+            helperText.innerHTML = 'The APK is available and ready to install. Save the file, then open it on your Android device.';
+          } catch (_error) {
+            markUnverified();
+          }
+        }
+
+        checkDownloadState();
+      })();
+    </script>
+  </body>
+</html>

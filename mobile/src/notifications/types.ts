@@ -5,13 +5,15 @@ export type NotificationRouteTarget =
   | 'leave'
   | 'attendance'
   | 'support'
-  | 'work';
+  | 'work'
+  | 'reports';
 
 export interface NotificationRoute {
   target: NotificationRouteTarget;
   taskId?: string;
   announcementId?: string;
   supportId?: string;
+  reportId?: string;
 }
 
 export interface InAppNotification {

@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureGetItem, secureSetItem, secureDeleteItem } from '../services/secureStorage';
 import { useAuth } from '../context/AuthContext';
 import { useRealtime } from '../context/RealtimeContext';
 import ENV from '../config/env';
@@ -235,7 +235,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     notificationService.setupNotificationHandler();
     void notificationService.ensureAndroidChannel();
 
-    AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY)
+    secureGetItem(NOTIFICATION_STORAGE_KEY)
       .then(raw => {
         if (disposed) return;
         let items: InAppNotification[] | null = null;
@@ -263,7 +263,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         } else {
           // No inbox or one that belongs to another account / an old format:
           // drop it so it can never surface under the wrong user.
-          void AsyncStorage.removeItem(NOTIFICATION_STORAGE_KEY).catch(() => {});
+          void secureDeleteItem(NOTIFICATION_STORAGE_KEY).catch(() => {});
         }
         readyRef.current = true;
         setReady(true);
@@ -373,7 +373,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!ready || !employeeId) return;
     const envelope: StoredInbox = { ownerId: employeeId, items: notifications };
-    void AsyncStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(envelope)).catch(() => {});
+    void secureSetItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(envelope)).catch(() => {});
   }, [notifications, ready, employeeId]);
 
   // Logout (or a failed session restore): wipe the in-memory inbox, the
@@ -385,7 +385,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     setReady(false);
     setPendingRoute(null);
     setLatestArrival(null);
-    void AsyncStorage.removeItem(NOTIFICATION_STORAGE_KEY).catch(() => {});
+    void secureDeleteItem(NOTIFICATION_STORAGE_KEY).catch(() => {});
   }, [authLoading, employeeId]);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);

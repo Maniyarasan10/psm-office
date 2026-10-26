@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import * as FileSystem from 'expo-file-system';
-import { documentUrl } from '../services/api';
+import * as FileSystem from 'expo-file-system/legacy';
+import { API_HOST, documentUrl, getAuthToken } from '../services/api';
 
 export interface DocumentFileData {
   previewUri: string | null;
@@ -25,11 +25,24 @@ function safeFileName(name: string): string {
   return cleaned || `document-${Date.now()}`;
 }
 
+/**
+ * Authenticated downloads only add the bearer token for URLs that point at our
+ * own API. Signed CDN URLs must be fetched without it so the token never leaks
+ * to a third-party host.
+ */
+async function authHeadersFor(url: string): Promise<Record<string, string> | undefined> {
+  const isOwnHost = (!!API_HOST && url.startsWith(API_HOST)) || url.startsWith('/');
+  if (!isOwnHost) return undefined;
+  const token = await getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
+
 export function useDocumentFile(
   documentId: string,
   fileName: string,
   fileType?: string,
-  resolveUrl: (id: string) => string = documentUrl
+  resolveUrl: (id: string) => string = documentUrl,
+  directUrl?: string | null
 ): DocumentFileData {
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -42,8 +55,10 @@ export function useDocumentFile(
     setDownloading(true);
     setError(null);
     try {
+      const url = directUrl || resolveUrl(documentId);
+      const headers = await authHeadersFor(url);
       const localUri = `${FileSystem.cacheDirectory}doc-preview-${documentId}${fileType ?? ''}`;
-      const result = await FileSystem.downloadAsync(resolveUrl(documentId), localUri);
+      const result = await FileSystem.downloadAsync(url, localUri, headers ? { headers } : undefined);
       if (result.status >= 200 && result.status < 300) {
         setPreviewUri(result.uri);
       } else {
@@ -54,17 +69,19 @@ export function useDocumentFile(
     } finally {
       setDownloading(false);
     }
-  }, [documentId, fileType, resolveUrl]);
+  }, [documentId, fileType, resolveUrl, directUrl]);
 
   const saveToDevice = useCallback(async () => {
     if (!documentId) return;
     setSaving(true);
     setError(null);
     try {
+      const url = directUrl || resolveUrl(documentId);
+      const headers = await authHeadersFor(url);
       const dir = `${FileSystem.documentDirectory}documents/`;
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => undefined);
       const localUri = `${dir}${safeFileName(fileName)}`;
-      const result = await FileSystem.downloadAsync(resolveUrl(documentId), localUri);
+      const result = await FileSystem.downloadAsync(url, localUri, headers ? { headers } : undefined);
       if (result.status >= 200 && result.status < 300) {
         setSavedPath(result.uri);
       } else {
@@ -75,7 +92,7 @@ export function useDocumentFile(
     } finally {
       setSaving(false);
     }
-  }, [documentId, fileName, resolveUrl]);
+  }, [documentId, fileName, resolveUrl, directUrl]);
 
   return {
     previewUri,

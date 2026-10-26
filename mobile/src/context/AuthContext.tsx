@@ -1,8 +1,8 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureGetItem, secureSetItem, secureDeleteItem, secureMultiDelete } from '../services/secureStorage';
 import { Employee } from '../types';
 import { RECENT_SEARCHES_STORAGE_KEY } from '../hooks/useRecentSearches';
-import { setAuthToken, clearAuthToken, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY, setOnAuthFailure, getAuthToken } from '../services/api';
+import { setAuthToken, clearAuthToken, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY, setOnAuthFailure, getAuthToken, isTokenValid, revokeTokens } from '../services/api';
 import { clearOfflineCache } from '../services/offlineCache';
 
 interface AuthContextType {
@@ -72,24 +72,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadStored = async () => {
     try {
-      const stored = await AsyncStorage.getItem(EMPLOYEE_STORAGE_KEY);
+      const stored = await secureGetItem(EMPLOYEE_STORAGE_KEY);
       if (stored) {
         try {
           const parsed = JSON.parse(stored) as Employee | null;
           if (parsed && typeof parsed === 'object' && typeof parsed._id === 'string') {
             setEmployee(sanitizeEmployee(parsed));
           } else {
-            await AsyncStorage.removeItem(EMPLOYEE_STORAGE_KEY);
+            await secureDeleteItem(EMPLOYEE_STORAGE_KEY);
             setEmployee(null);
           }
         } catch (parseErr) {
-          console.error('Failed to parse stored auth:', parseErr);
-          await AsyncStorage.removeItem(EMPLOYEE_STORAGE_KEY);
+          await secureDeleteItem(EMPLOYEE_STORAGE_KEY);
           setEmployee(null);
         }
       }
     } catch (err) {
-      console.error('Failed to load auth:', err);
       setEmployee(null);
     } finally {
       setLoading(false);
@@ -111,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (!refreshToken) {
         try {
-          refreshToken = await AsyncStorage.getItem(AUTH_REFRESH_TOKEN_KEY);
+          refreshToken = await secureGetItem(AUTH_REFRESH_TOKEN_KEY);
         } catch {
           refreshToken = null;
         }
@@ -119,15 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setEmployee(clean);
       setAuthToken(token);
-      await AsyncStorage.setItem(EMPLOYEE_STORAGE_KEY, JSON.stringify(clean));
+      await secureSetItem(EMPLOYEE_STORAGE_KEY, JSON.stringify(clean));
       if (token) {
-        await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+        await secureSetItem(AUTH_TOKEN_KEY, token);
       }
       if (refreshToken) {
-        await AsyncStorage.setItem(AUTH_REFRESH_TOKEN_KEY, refreshToken);
+        await secureSetItem(AUTH_REFRESH_TOKEN_KEY, refreshToken);
       }
     } catch (err) {
-      console.error('Failed to save auth:', err);
+      // Storage failure is non-fatal; session continues in memory only.
     }
   };
 
@@ -138,9 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEmployee(current => {
         if (!current) return current;
         const next = sanitizeEmployee({ ...current, ...patch });
-        void AsyncStorage.setItem(EMPLOYEE_STORAGE_KEY, JSON.stringify(next)).catch(err => {
-          console.error('Failed to persist profile update:', err);
-        });
+        void secureSetItem(EMPLOYEE_STORAGE_KEY, JSON.stringify(next));
         return next;
       });
     } catch (err) {
@@ -150,12 +146,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      // Revoke tokens server-side so they cannot be reused after logout.
+      await revokeTokens().catch(() => {});
       setEmployee(null);
       clearAuthToken();
-      await AsyncStorage.multiRemove([EMPLOYEE_STORAGE_KEY, RECENT_SEARCHES_STORAGE_KEY, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY]);
+      await secureMultiDelete([EMPLOYEE_STORAGE_KEY, RECENT_SEARCHES_STORAGE_KEY, AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY]);
       clearOfflineCache();
-    } catch (err) {
-      console.error('Failed to clear auth:', err);
+    } catch {
+      // Logout should not throw; local state is cleared regardless.
     }
   };
 

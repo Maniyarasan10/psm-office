@@ -375,21 +375,47 @@ def admin_send_reset_otp():
 
 
 @auth_bp.route("/api/auth/logout", methods=["POST"])
-@auth_required
 def logout():
-    """Invalidate the caller's tokens without affecting anyone else."""
-    auth = current_auth() or {}
-    if auth.get("role") == "admin":
-        token_versions.revoke_everyone()
-    else:
-        token_versions.invalidate_person(auth.get("sub"))
+    """Invalidate the caller's tokens without affecting anyone else.
+
+    Accepts the access token via the Authorization header/cookie, or an access
+    or refresh token in the JSON body. Revoking through the refresh token is
+    important: the mobile client may reach logout after its short-lived access
+    token has already expired, and a refresh token must not survive logout.
+    """
+    data = request.get_json(silent=True) or {}
+    payload = None
+
+    access_token = (data.get("token") or "").strip()
+    if access_token:
+        payload = verify_token(access_token, expected_type="access")
+
+    if not payload:
+        refresh_token = (data.get("refresh_token") or "").strip()
+        if not refresh_token:
+            refresh_token = (request.cookies.get("psm_refresh") or "").strip()
+        if refresh_token:
+            payload = verify_token(refresh_token, expected_type="refresh")
+
+    if not payload:
+        payload = current_auth() or None
+
+    if payload:
+        if payload.get("role") == "admin":
+            token_versions.revoke_everyone()
+        else:
+            token_versions.invalidate_person(payload.get("sub"))
+
     response = jsonify({"message": "Signed out"})
-    response.delete_cookie(
-        config.auth_cookie_name(),
-        path="/",
-        secure=config.auth_cookie_secure(),
-        samesite=config.auth_cookie_samesite(),
-    )
+    for cookie_name in (config.auth_cookie_name(), "psm_refresh"):
+        if not cookie_name:
+            continue
+        response.delete_cookie(
+            cookie_name,
+            path="/",
+            secure=config.auth_cookie_secure(),
+            samesite=config.auth_cookie_samesite(),
+        )
     return response
 
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureGetItem, secureSetItem } from '../services/secureStorage';
 
 export const RECENT_SEARCHES_STORAGE_KEY = 'psm_recent_searches';
 const STORAGE_KEY = RECENT_SEARCHES_STORAGE_KEY;
@@ -24,7 +24,7 @@ export function useRecentSearches(): RecentSearchesData {
 
   useEffect(() => {
     let cancelled = false;
-    void AsyncStorage.getItem(STORAGE_KEY)
+    void secureGetItem(STORAGE_KEY)
       .then(raw => {
         if (cancelled || !raw) return;
         try {
@@ -53,7 +53,7 @@ export function useRecentSearches(): RecentSearchesData {
   const persist = useCallback((next: string[]) => {
     setRecents(next);
     if (!hydrated.current) return;
-    void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {
+    void secureSetItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {
       // Best effort only.
     });
   }, []);

@@ -8,33 +8,38 @@ import {
   Pressable,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { NavigationProp, ParamListBase, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../context/AuthContext';
-import { profilePhotoUrl } from '../services/api';
+import { profilePhotoUrl, getMyReports } from '../services/api';
 import { useNotifications } from '../notifications/NotificationContext';
-import { AttendanceRecord, SupportStatusStats, Task } from '../types';
-import { colors, spacing, radius, typography } from '../theme';
+import { AttendanceRecord, DailyReport, SupportStatusStats, Task, TaskStatus } from '../types';
+import { colors, spacing, radius, typography, shadows } from '../theme';
 import { Avatar } from '../components/ui/avatar';
 import { Button } from '../components/ui/button';
 import { IconButton } from '../components/ui/icon-button';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Modal } from '../components/ui/modal';
 import { SkeletonLoader } from '../components/ui/skeleton-loader';
+import { Card } from '../components/ui/card';
+import { todayIso as leaveTodayIso } from '../utils/leave';
+import { useTasks } from '../hooks/useTasks';
 import {
   useHomeData,
   getGreeting,
   todayLabel,
+  timeToMinutes,
   format12Hour,
   formatDuration,
   formatWorkingMinutes,
-  formatShortDate,
   relativeDueLabel,
-  timeToMinutes,
 } from '../hooks/useHomeData';
+import { useAttendance } from '../hooks/useAttendance';
+import { formatShortDate } from '../hooks/useHomeData';
 import { SupportScope, useSupportSummary } from '../hooks/useSupport';
 import { useCalendarSummary } from '../hooks/useCalendar';
 import { useCompanyStory } from '../hooks/useCompanyStory';
@@ -63,6 +68,57 @@ export default function HomeScreen() {
     reload,
     refresh,
   } = useHomeData(personId ? { personId, personType: personTypeValue } : null);
+
+  const {
+    submitting: attendanceSubmitting,
+    checkIn: attendanceCheckIn,
+    checkOut: attendanceCheckOut,
+  } = useAttendance(personId ? { personId, personType: personTypeValue } : null);
+
+  const {
+    updateStatus: updateTaskStatus,
+    submitting: tasksSubmitting,
+  } = useTasks(personId ? { personId, personType: personTypeValue, authorName: employee?.name } : null);
+
+  const [reports, setReports] = useState<DailyReport[]>([]);
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportDate, setReportDate] = useState(leaveTodayIso());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedViewDate, setSelectedViewDate] = useState('');
+
+  const todayReport = useMemo(
+    () => reports.find((r) => r.date === reportDate),
+    [reports, reportDate]
+  );
+
+  const loadReports = useCallback(async () => {
+    if (!personId) return;
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const res = await getMyReports(personId, personTypeValue);
+      setReports(res.data?.reports || []);
+    } catch {
+      setReportError("Couldn't load your reports");
+    } finally {
+      setReportLoading(false);
+    }
+  }, [personId, personTypeValue]);
+
+  // Enable a new report form at midnight (12 AM) every day. When the device
+  // date rolls over, reset reportDate so todayReport becomes undefined and the
+  // submit form becomes available again.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = leaveTodayIso();
+      if (now !== reportDate) {
+        setReportDate(now);
+        void loadReports();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [reportDate, loadReports]);
 
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const { unreadCount } = useNotifications();
@@ -137,6 +193,18 @@ export default function HomeScreen() {
         supportDidFocusOnce.current = true;
       }
     }, [silentSupportReload])
+  );
+
+  const reportDidFocusOnce = React.useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (reportDidFocusOnce.current) {
+        loadReports();
+      } else {
+        reportDidFocusOnce.current = true;
+        loadReports();
+      }
+    }, [loadReports])
   );
 
   const handleLogout = () => {
@@ -356,6 +424,13 @@ export default function HomeScreen() {
           onRetry={reload}
           onOpenAttendance={() => navigation.navigate('Attendance')}
           onViewHistory={() => navigation.navigate('Attendance')}
+          submitting={attendanceSubmitting}
+          onCheckIn={() => {
+            void attendanceCheckIn();
+          }}
+          onCheckOut={() => {
+            void attendanceCheckOut();
+          }}
         />
 
         <NeedsAttentionSection
@@ -373,6 +448,17 @@ export default function HomeScreen() {
           onRetry={reload}
           onViewAll={() => navigation.navigate('Tasks')}
           onSelectTask={openTask}
+          onUpdateStatus={updateTaskStatus}
+          tasksSubmitting={tasksSubmitting}
+        />
+
+        <ReportsSection
+          todayReport={todayReport}
+          reports={reports}
+          reportDate={reportDate}
+          loading={reportLoading}
+          error={reportError}
+          onRetry={loadReports}
         />
 
         <AnnouncementsSection
@@ -462,6 +548,9 @@ function TodayStatusSection({
   onRetry,
   onOpenAttendance,
   onViewHistory,
+  submitting,
+  onCheckIn,
+  onCheckOut,
 }: {
   needsCheckIn: boolean;
   isWorking: boolean;
@@ -472,6 +561,9 @@ function TodayStatusSection({
   onRetry: () => void;
   onOpenAttendance: () => void;
   onViewHistory: () => void;
+  submitting?: boolean;
+  onCheckIn?: () => void;
+  onCheckOut?: () => void;
 }) {
   return (
     <View style={styles.section}>
@@ -489,48 +581,80 @@ function TodayStatusSection({
           </Pressable>
         </View>
       ) : needsCheckIn ? (
-        <Pressable
-          onPress={onOpenAttendance}
-          style={({ pressed }) => [styles.statusRowCard, pressed && styles.rowPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Open attendance"
-        >
-          <View style={styles.statusIconCircle}>
-            <MaterialCommunityIcons name="clock-in" size={22} color={colors.textSecondary} />
-          </View>
-          <View style={styles.statusContent}>
-            <Text style={styles.statusPrimary}>Not checked in</Text>
-            <Text style={styles.statusSecondary}>You haven't marked your attendance yet.</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
-        </Pressable>
+        <View style={styles.statusRowCard}>
+          <Pressable
+            onPress={onOpenAttendance}
+            style={({ pressed }) => [styles.statusRowInner, pressed && styles.rowPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Open attendance"
+          >
+            <View style={styles.statusIconCircle}>
+              <MaterialCommunityIcons name="clock-in" size={22} color={colors.textSecondary} />
+            </View>
+            <View style={styles.statusContent}>
+              <Text style={styles.statusPrimary}>Not checked in</Text>
+              <Text style={styles.statusSecondary}>You haven't marked your attendance yet.</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+          </Pressable>
+          {onCheckIn && (
+            <View style={styles.statusActionRow}>
+              <Button
+                variant="primary"
+                size="md"
+                loading={submitting}
+                onPress={onCheckIn}
+                accessibilityLabel="Check in"
+                style={styles.statusActionButton}
+              >
+                Check In
+              </Button>
+            </View>
+          )}
+        </View>
       ) : (
-        <Pressable
-          onPress={onOpenAttendance}
-          style={({ pressed }) => [styles.statusCard, pressed && styles.rowPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Open attendance"
-        >
-          <View style={styles.statusRow}>
-            <View style={styles.statusItem}>
-              <Text style={styles.statusItemLabel}>Check in</Text>
-              <Text style={styles.statusItemValue}>{format12Hour(attendance?.clock_in)}</Text>
+        <View style={styles.statusCard}>
+          <Pressable
+            onPress={onOpenAttendance}
+            style={({ pressed }) => [styles.statusCardInner, pressed && styles.rowPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Open attendance"
+          >
+            <View style={styles.statusRow}>
+              <View style={styles.statusItem}>
+                <Text style={styles.statusItemLabel}>Check in</Text>
+                <Text style={styles.statusItemValue}>{format12Hour(attendance?.clock_in)}</Text>
+              </View>
+              <View style={styles.statusDivider} />
+              <View style={styles.statusItem}>
+                <Text style={styles.statusItemLabel}>{isWorking ? 'Working' : 'Check out'}</Text>
+                <Text style={styles.statusItemValue}>
+                  {isWorking ? formatWorkingMinutes(workingMinutes) : format12Hour(attendance?.clock_out)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.statusDivider} />
-            <View style={styles.statusItem}>
-              <Text style={styles.statusItemLabel}>{isWorking ? 'Working' : 'Check out'}</Text>
-              <Text style={styles.statusItemValue}>
-                {isWorking ? formatWorkingMinutes(workingMinutes) : format12Hour(attendance?.clock_out)}
-              </Text>
+            <View style={styles.statusFooter}>
+              <StatusBadge status={isCompleted ? 'Completed' : (attendance?.status ?? 'Present')} />
+              {isCompleted && attendance?.working_hours != null && (
+                <Text style={styles.statusFooterText}>{formatDuration(attendance.working_hours)} today</Text>
+              )}
             </View>
-          </View>
-          <View style={styles.statusFooter}>
-            <StatusBadge status={isCompleted ? 'Completed' : (attendance?.status ?? 'Present')} />
-            {isCompleted && attendance?.working_hours != null && (
-              <Text style={styles.statusFooterText}>{formatDuration(attendance.working_hours)} today</Text>
-            )}
-          </View>
-        </Pressable>
+          </Pressable>
+          {isWorking && onCheckOut && (
+            <View style={styles.statusActionRow}>
+              <Button
+                variant="primary"
+                size="md"
+                loading={submitting}
+                onPress={onCheckOut}
+                accessibilityLabel="Check out"
+                style={styles.statusActionButton}
+              >
+                Check Out
+              </Button>
+            </View>
+          )}
+        </View>
       )}
     </View>
   );
@@ -607,6 +731,8 @@ function TodayWorkSection({
   onRetry,
   onViewAll,
   onSelectTask,
+  onUpdateStatus,
+  tasksSubmitting,
 }: {
   tasks: Task[];
   todayIso: string;
@@ -615,9 +741,31 @@ function TodayWorkSection({
   onRetry: () => void;
   onViewAll: () => void;
   onSelectTask: (taskId: string) => void;
+  onUpdateStatus?: (taskId: string, nextStatus: TaskStatus) => Promise<boolean>;
+  tasksSubmitting?: boolean;
 }) {
   const showUpcoming = tasks.length === 0 && upcomingTasks.length > 0;
   const displayTasks = showUpcoming ? upcomingTasks : tasks;
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+
+  const nextStatusOf = (current: TaskStatus): TaskStatus => {
+    if (current === 'Pending') return 'In Progress';
+    if (current === 'In Progress') return 'Completed';
+    return 'Pending';
+  };
+
+  const handleStatusChange = async (task: Task) => {
+    if (!onUpdateStatus || updatingTaskId === task._id) return;
+    const next = nextStatusOf(task.status);
+    setUpdatingTaskId(task._id);
+    try {
+      await onUpdateStatus(task._id, next);
+    } catch {
+      // Error handled by the hook (actionError shown elsewhere)
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
 
   return (
     <View style={styles.section}>
@@ -666,11 +814,213 @@ function TodayWorkSection({
                       : ''}
                 </Text>
               </View>
-              <StatusBadge status={task.status} />
+              <Pressable
+                onPress={() => handleStatusChange(task)}
+                disabled={updatingTaskId === task._id || Boolean(tasksSubmitting)}
+                style={styles.statusBadgeWrap}
+                accessibilityRole="button"
+                accessibilityLabel={`Update status to ${nextStatusOf(task.status)}`}
+              >
+                <StatusBadge status={task.status} />
+                {updatingTaskId === task._id && (
+                  <ActivityIndicator size='small' color={colors.primary} style={styles.statusSpinner} />
+                )}
+              </Pressable>
             </Pressable>
           ))}
         </View>
       )}
+    </View>
+  );
+}
+
+function ReportsSection({
+  todayReport,
+  reports,
+  reportDate,
+  loading,
+  error,
+  onRetry,
+}: {
+  todayReport: DailyReport | undefined;
+  reports: DailyReport[];
+  reportDate: string;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedViewDate, setSelectedViewDate] = useState('');
+
+  const previousReports = useMemo(() => {
+    const today = reportDate;
+    return [...reports]
+      .filter(r => r.date !== today)
+      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+      .slice(0, 6);
+  }, [reports, reportDate]);
+
+  const openReport = (report: DailyReport) => {
+    navigation.navigate('SubmitReport', { reportId: report._id });
+  };
+
+  const pickDate = (date: string) => {
+    setSelectedViewDate(date);
+    const match = reports.find(r => r.date === date);
+    if (match) {
+      openReport(match);
+    }
+    setShowDatePicker(false);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.section}>
+        <SectionHeader title="Daily report" />
+        <View style={styles.reportSkeleton}>
+          <View style={styles.reportSkeletonLine} />
+          <View style={styles.reportSkeletonLine} />
+        </View>
+      </View>
+    );
+  }
+
+  const subtitle = todayReport
+    ? `Submitted ${new Date(todayReport.submitted_at || todayReport.updated_at || todayReport.date).toLocaleString(
+        [],
+        { hour: '2-digit', minute: '2-digit' }
+      )}`
+    : 'Submit your daily work progress so your admin can see it.';
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader
+        title="Daily report"
+        onAction={() => navigation.navigate('SubmitReport')}
+        actionLabel="View all"
+      />
+
+      {error && !todayReport ? (
+        <View style={styles.inlineError}>
+          <Text style={styles.inlineErrorText}>Couldn't load your reports</Text>
+          <Pressable onPress={onRetry} accessibilityRole="button">
+            <Text style={styles.inlineErrorAction}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : todayReport ? (
+        <>
+          <View style={styles.submittedCard}>
+            <Text style={styles.submittedLabel}>Submitted today</Text>
+            <Card>
+              <Text style={styles.reportContent}>{todayReport.content}</Text>
+              {todayReport.hours != null && (
+                <View style={styles.hoursRow}>
+                  <Text style={styles.hoursLabel}>Hours</Text>
+                  <Text style={styles.hoursValue}>{String(todayReport.hours)} h</Text>
+                </View>
+              )}
+              <Text style={styles.submittedAt}>
+                Submitted{' '}
+                {new Date(todayReport.submitted_at || todayReport.updated_at || todayReport.date).toLocaleString(
+                  [],
+                  { hour: '2-digit', minute: '2-digit' }
+                )}
+              </Text>
+            </Card>
+            <Button
+              variant="ghost"
+              onPress={() => navigation.navigate('SubmitReport', { reportId: todayReport._id })}
+              accessibilityLabel='Update report'
+            >
+              Update report
+            </Button>
+          </View>
+
+          {previousReports.length > 0 && (
+            <>
+              <Text style={styles.sectionLabel}>Previous reports</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previousReportsList}>
+                {previousReports.map(report => (
+                  <Pressable
+                    key={report._id}
+                    onPress={() => openReport(report)}
+                    style={styles.previousReportCard}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View report for ${report.date}`}
+                  >
+                    <Text style={styles.previousReportDate}>{formatShortDate(report.date)}</Text>
+                    <Text style={styles.previousReportContent} numberOfLines={2}>{report.content}</Text>
+                    {report.hours != null && (
+                      <Text style={styles.previousReportHours}>{String(report.hours)} h</Text>
+                    )}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
+          <Pressable
+            onPress={() => setShowDatePicker(true)}
+            style={styles.selectDateRow}
+            accessibilityRole="button"
+            accessibilityLabel="Select date"
+          >
+            <MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.textSecondary} />
+            <Text style={styles.selectDateText}>Select a date to view report</Text>
+          </Pressable>
+        </>
+      ) : (
+        <Pressable
+          onPress={() => navigation.navigate('SubmitReport')}
+          style={styles.submitCard}
+          accessibilityRole="button"
+          accessibilityLabel="Submit today's report"
+        >
+          <View style={styles.submitCardContent}>
+            <MaterialCommunityIcons name="clipboard-text-outline" size={24} color={colors.primary} />
+            <View>
+              <Text style={styles.submitCardTitle}>Submit today's report</Text>
+              <Text style={styles.submitCardSubtitle}>Tell your admin what you worked on today.</Text>
+            </View>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+        </Pressable>
+      )}
+
+      {selectedViewDate && !reports.find(r => r.date === selectedViewDate) && (
+        <View style={styles.emptyRow}>
+          <MaterialCommunityIcons name="calendar-blank-outline" size={18} color={colors.textMuted} />
+          <Text style={styles.emptyText}>No report for {formatShortDate(selectedViewDate)}.</Text>
+        </View>
+      )}
+
+      <Modal visible={showDatePicker} onClose={() => setShowDatePicker(false)} transparent animationType="fade">
+        <View style={styles.modalOverlay} />
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select date</Text>
+            <Pressable onPress={() => setShowDatePicker(false)} style={styles.modalClose}>
+              <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+          <Text style={styles.modalSubtitle}>Pick a date to view that day's report</Text>
+          <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalListContent}>
+            {[todayReport, ...previousReports].filter(Boolean).map(report => (
+              <Pressable
+                key={report!._id}
+                onPress={() => pickDate(report!.date)}
+                style={styles.modalRow}
+                accessibilityRole="button"
+              >
+                <Text style={styles.modalRowDate}>{formatShortDate(report!.date)}</Text>
+                <Text style={styles.modalRowLabel}>{report!.content.slice(0, 40)}{report!.content.length > 40 ? '…' : ''}</Text>
+                {report!.hours != null && <Text style={styles.modalRowHours}>{String(report!.hours)} h</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1152,13 +1502,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusRowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.large,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  statusRowInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     padding: spacing.lg,
+  },
+  statusActionRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  statusActionButton: {
+    width: '100%',
   },
   statusIconCircle: {
     width: 40,
@@ -1187,6 +1550,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.large,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  statusCardInner: {
     padding: spacing.lg,
   },
   statusRow: {
@@ -1649,5 +2015,210 @@ const styles = StyleSheet.create({
   },
   skeletonSpacing: {
     marginBottom: spacing.md,
+  },
+  statusBadgeWrap: {
+    padding: spacing.xs,
+    borderRadius: radius.small,
+  },
+  statusSpinner: {
+    position: 'absolute',
+    right: spacing.xs,
+  },
+  reportSkeleton: {
+    gap: spacing.sm,
+  },
+  reportSkeletonLine: {
+    height: 14,
+    backgroundColor: colors.backgroundLite,
+    borderRadius: radius.pill,
+    width: '45%',
+  },
+  submitButton: {
+    marginTop: spacing.lg,
+  },
+  savedRow: {
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  savedText: {
+    ...typography.bodyMedium,
+    color: colors.success,
+    marginBottom: spacing.sm,
+  },
+  editLink: {
+    marginTop: spacing.xs,
+  },
+  editLinkText: {
+    ...typography.bodyMedium,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  submittedCard: {
+    marginBottom: spacing.lg,
+  },
+  submittedLabel: {
+    ...typography.label,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  reportContent: {
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  hoursRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  hoursLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  hoursValue: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  submittedAt: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  submitCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.large,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
+  },
+  submitCardContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+    marginRight: spacing.sm,
+  },
+  submitCardTitle: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  submitCardSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  previousReportsList: {
+    gap: spacing.md,
+    paddingRight: spacing.lg,
+  },
+  previousReportCard: {
+    width: 150,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.large,
+    padding: spacing.md,
+    marginRight: spacing.sm,
+  },
+  previousReportDate: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  previousReportContent: {
+    ...typography.body,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  previousReportHours: {
+    ...typography.caption,
+    color: colors.success,
+    fontWeight: '600',
+  },
+  selectDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  selectDateText: {
+    ...typography.bodyMedium,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.large,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '75%',
+    ...shadows.modal,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  modalClose: {
+    padding: spacing.xs,
+  },
+  modalTitle: {
+    ...typography.subtitle,
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  modalList: {
+    maxHeight: 300,
+  },
+  modalListContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+    gap: spacing.sm,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  modalRowDate: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  modalRowLabel: {
+    ...typography.body,
+    color: colors.textSecondary,
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  modalRowHours: {
+    ...typography.caption,
+    color: colors.success,
+    fontWeight: '600',
   },
 });

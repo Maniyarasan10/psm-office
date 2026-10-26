@@ -237,162 +237,164 @@ export default function CalendarHomeScreen() {
         showShadow
       />
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-      >
-        {failedSources.length > 0 && (
-          <View style={styles.inlineError} accessibilityRole='alert'>
-            <Text style={styles.inlineErrorText}>
-              Some items could not be loaded: {failedLabels}.
-            </Text>
-            <Pressable onPress={reload} accessibilityRole='button' hitSlop={8}>
-              <Text style={styles.inlineErrorAction}>Retry</Text>
-            </Pressable>
-          </View>
-        )}
-
-        <View style={styles.monthBar}>
-          <IconButton
-            icon='chevron-left'
-            size='lg'
-            color={colors.textPrimary}
-            onPress={goToPreviousMonth}
-            accessibilityLabel='Previous month'
-          />
-          <Text style={styles.monthTitle} accessibilityRole='header' numberOfLines={1}>
-            {formatMonthTitle(monthKey)}
-          </Text>
-          <IconButton
-            icon='chevron-right'
-            size='lg'
-            color={colors.textPrimary}
-            onPress={goToNextMonth}
-            accessibilityLabel='Next month'
-          />
-        </View>
-
-        <View style={styles.selectedBar}>
-          <Text style={styles.selectedDate} numberOfLines={1} accessibilityRole='text'>
-            {formatDateLong(selected)}
-          </Text>
-          {selected !== today && (
-            <Pressable
-              onPress={goToToday}
-              style={styles.todayButton}
-              accessibilityRole='button'
-              accessibilityLabel='Return to today'>
-              <MaterialCommunityIcons name='calendar-today-outline' size={14} color={colors.primary} />
-              <Text style={styles.todayButtonText}>Today</Text>
-            </Pressable>
+      <View style={styles.screenWrap}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+        >
+          {failedSources.length > 0 && (
+            <View style={styles.inlineError} accessibilityRole='alert'>
+              <Text style={styles.inlineErrorText}>
+                Some items could not be loaded: {failedLabels}.
+              </Text>
+              <Pressable onPress={reload} accessibilityRole='button' hitSlop={8}>
+                <Text style={styles.inlineErrorAction}>Retry</Text>
+              </Pressable>
+            </View>
           )}
-        </View>
 
-        <View style={styles.card}>
-          <MonthGrid
-            monthKey={monthKey}
-            today={today}
-            selected={selected}
-            index={index}
-            onSelect={selectDate}
-          />
-        </View>
-
-        <View style={styles.legend} accessibilityLabel='Calendar markers'>
-          {KIND_ORDER.map(kind => {
-            const meta = CALENDAR_KIND[kind];
-            return (
-              <View key={kind} style={styles.legendItem}>
-                <View
-                  style={[
-                    styles.legendMark,
-                    kind === 'leave' ? styles.legendMarkLeave : { backgroundColor: meta.color },
-                  ]}
-                />
-                <Text style={styles.legendLabel}>{meta.legend}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        {showsLeaveNote && (
-          <Text style={styles.rangeNote}>
-            Absence history is recorded for the last {CALENDAR_LEAVE_WINDOW} days, up to{' '}
-            {formatDateField(leaveCutoff)}.
-          </Text>
-        )}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel} accessibilityRole='header'>
-            {agendaDateLabel(selected, today)}
-          </Text>
-          <Text style={styles.sectionCount}>
-            {dayItems.length === 0
-              ? 'No items'
-              : `${dayItems.length} item${dayItems.length === 1 ? '' : 's'}`}
-          </Text>
-        </View>
-
-        {dayItems.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <EmptyState
-              title='No events scheduled.'
-              subtitle='Nothing on your calendar for this date.'
-              icon='calendar-blank-outline'
+          <View style={styles.monthBar}>
+            <IconButton
+              icon='chevron-left'
+              size='lg'
+              color={colors.textPrimary}
+              onPress={goToPreviousMonth}
+              accessibilityLabel='Previous month'
+            />
+            <Text style={styles.monthTitle} accessibilityRole='header' numberOfLines={1}>
+              {formatMonthTitle(monthKey)}
+            </Text>
+            <IconButton
+              icon='chevron-right'
+              size='lg'
+              color={colors.textPrimary}
+              onPress={goToNextMonth}
+              accessibilityLabel='Next month'
             />
           </View>
-        ) : (
+
+          <View style={styles.selectedBar}>
+            <Text style={styles.selectedDate} numberOfLines={1} accessibilityRole='text'>
+              {formatDateLong(selected)}
+            </Text>
+            {selected !== today && (
+              <Pressable
+                onPress={goToToday}
+                style={styles.todayButton}
+                accessibilityRole='button'
+                accessibilityLabel='Return to today'>
+                <MaterialCommunityIcons name='calendar-today-outline' size={14} color={colors.primary} />
+                <Text style={styles.todayButtonText}>Today</Text>
+              </Pressable>
+            )}
+          </View>
+
           <View style={styles.card}>
-            {dayItems.map((item, position) => (
-              <AgendaRow
-                key={item.id}
-                item={item}
-                onPress={openItem}
-                onLongPress={handleItemLongPress}
-                isLast={position === dayItems.length - 1}
-              />
-            ))}
+            <MonthGrid
+              monthKey={monthKey}
+              today={today}
+              selected={selected}
+              index={index}
+              onSelect={selectDate}
+            />
           </View>
-        )}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel} accessibilityRole='header'>
-            Upcoming
-          </Text>
-          <Text style={styles.sectionCount}>
-            {upcomingCount === 0
-              ? 'Nothing scheduled'
-              : `Next ${upcomingCount} item${upcomingCount === 1 ? '' : 's'}`}
-          </Text>
-        </View>
-
-        {upcomingCount === 0 ? (
-          <View style={styles.emptyRow}>
-            <MaterialCommunityIcons name='calendar-blank-outline' size={18} color={colors.textMuted} />
-            <Text style={styles.emptyText}>No upcoming items.</Text>
-          </View>
-        ) : (
-          upcoming.map(group => (
-            <View key={group.date} style={styles.group}>
-              <Text style={styles.groupDate} accessibilityRole='header'>
-                {agendaDateLabel(group.date, today)}
-              </Text>
-              <View style={styles.card}>
-                {group.items.map((item, position) => (
-                  <AgendaRow
-                    key={item.id}
-                    item={item}
-                    onPress={openItem}
-                    onLongPress={handleItemLongPress}
-                    isLast={position === group.items.length - 1}
+          <View style={styles.legend} accessibilityLabel='Calendar markers'>
+            {KIND_ORDER.map(kind => {
+              const meta = CALENDAR_KIND[kind];
+              return (
+                <View key={kind} style={styles.legendItem}>
+                  <View
+                    style={[
+                      styles.legendMark,
+                      kind === 'leave' ? styles.legendMarkLeave : { backgroundColor: meta.color },
+                    ]}
                   />
-                ))}
-              </View>
+                  <Text style={styles.legendLabel}>{meta.legend}</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {showsLeaveNote && (
+            <Text style={styles.rangeNote}>
+              Absence history is recorded for the last {CALENDAR_LEAVE_WINDOW} days, up to{' '}
+              {formatDateField(leaveCutoff)}.
+            </Text>
+          )}
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel} accessibilityRole='header'>
+              {agendaDateLabel(selected, today)}
+            </Text>
+            <Text style={styles.sectionCount}>
+              {dayItems.length === 0
+                ? 'No items'
+                : `${dayItems.length} item${dayItems.length === 1 ? '' : 's'}`}
+            </Text>
+          </View>
+
+          {dayItems.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <EmptyState
+                title='No events scheduled.'
+                subtitle='Nothing on your calendar for this date.'
+                icon='calendar-blank-outline'
+              />
             </View>
-          ))
-        )}
+          ) : (
+            <View style={styles.card}>
+              {dayItems.map((item, position) => (
+                <AgendaRow
+                  key={item.id}
+                  item={item}
+                  onPress={openItem}
+                  onLongPress={handleItemLongPress}
+                  isLast={position === dayItems.length - 1}
+                />
+              ))}
+            </View>
+          )}
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel} accessibilityRole='header'>
+              Upcoming
+            </Text>
+            <Text style={styles.sectionCount}>
+              {upcomingCount === 0
+                ? 'Nothing scheduled'
+                : `Next ${upcomingCount} item${upcomingCount === 1 ? '' : 's'}`}
+            </Text>
+          </View>
+
+          {upcomingCount === 0 ? (
+            <View style={styles.emptyRow}>
+              <MaterialCommunityIcons name='calendar-blank-outline' size={18} color={colors.textMuted} />
+              <Text style={styles.emptyText}>No upcoming items.</Text>
+            </View>
+          ) : (
+            upcoming.map(group => (
+              <View key={group.date} style={styles.group}>
+                <Text style={styles.groupDate} accessibilityRole='header'>
+                  {agendaDateLabel(group.date, today)}
+                </Text>
+                <View style={styles.card}>
+                  {group.items.map((item, position) => (
+                    <AgendaRow
+                      key={item.id}
+                      item={item}
+                      onPress={openItem}
+                      onLongPress={handleItemLongPress}
+                      isLast={position === group.items.length - 1}
+                    />
+                  ))}
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
         <Pressable
           onPress={openAddItem}
           style={styles.fab}
@@ -400,7 +402,7 @@ export default function CalendarHomeScreen() {
           accessibilityLabel="Add personal note">
           <MaterialCommunityIcons name='plus' size={22} color={colors.textInverted} />
         </Pressable>
-      </ScrollView>
+      </View>
 
       <Modal visible={addItemVisible} onClose={closeItemModal}>
         <KeyboardAvoidingView
@@ -489,6 +491,11 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  screenWrap: {
+    flex: 1,
+    position: 'relative',
     backgroundColor: colors.background,
   },
   scrollContent: {

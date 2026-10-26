@@ -37,6 +37,7 @@ from backend.utils.photo_utils import (
     migrate_photos_to_storage,
 )
 from backend.utils import storage
+from backend.utils import media_tokens
 from backend.utils.auth import verify_token, auth_required
 from backend.utils.uploads import validate_image_upload
 from backend.scheduler import start_scheduler
@@ -98,6 +99,52 @@ _API_CSP = (
     "base-uri 'self'; "
     "object-src 'none'"
 )
+
+_MEDIA_KEYS = {
+    "photo_path",
+    "profile_photo_path",
+    "photoPath",
+    "file_url",
+    "attachment_url",
+}
+
+
+def _signed_media_value(value):
+    if not isinstance(value, str) or not value:
+        return value
+    if value.startswith("cloudinary://"):
+        return storage.delivery_url(value)
+    if value.startswith("/uploads/") or value.startswith("/api/photo/"):
+        return media_tokens.sign_path(value)
+    return value
+
+
+def _sign_media_payload(payload):
+    """Rewrite photo paths in an API response so clients never see raw paths."""
+    changed = False
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if key in _MEDIA_KEYS and isinstance(value, str):
+                signed = _signed_media_value(value)
+                if signed != value:
+                    payload[key] = signed
+                    changed = True
+            elif isinstance(value, (dict, list)):
+                changed = _sign_media_payload(value) or changed
+    elif isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, (dict, list)):
+                changed = _sign_media_payload(item) or changed
+    return changed
+
+
+def _media_allowed(path):
+    """Signed URL or an authenticated session may read a private file."""
+    if media_tokens.verify_request(path, request.args):
+        return True
+    from backend.utils.auth import current_auth
+
+    return current_auth() is not None
 
 
 def create_app():
@@ -167,6 +214,11 @@ def create_app():
                     "max-age=31536000; includeSubDomains",
                 )
 
+        if response.is_json:
+            payload = response.get_json(silent=True)
+            if payload is not None and _sign_media_payload(payload):
+                response.set_data(json.dumps(payload))
+
         start_time = getattr(g, "start_time", None)
         if start_time is not None:
             duration_ms = round((time.time() - start_time) * 1000, 2)
@@ -232,13 +284,28 @@ def create_app():
     def realtime_socket(ws):
         """Realtime channel: authenticates by token, then keeps the socket open.
 
-        The client sends nothing meaningful; the value of the connection is the
-        server pushing small event envelopes (see backend.realtime). Malformed or
-        expired tokens are rejected by closing immediately.
+        The mobile client sends ``{"type": "auth", "token": ...}`` as its first
+        frame so the token never appears in the URL or server access logs. The
+        ``?token=`` query parameter is still accepted for older web clients.
+        Malformed or expired tokens are rejected by closing immediately.
         """
         from backend.realtime import broker
 
         payload = verify_token(request.args.get("token", ""), expected_type="access")
+        if not payload:
+            try:
+                first_frame = ws.receive(timeout=10)
+            except Exception:
+                first_frame = None
+            if first_frame:
+                try:
+                    message = json.loads(first_frame)
+                except (TypeError, ValueError):
+                    message = None
+                if isinstance(message, dict) and message.get("type") == "auth":
+                    candidate = message.get("token")
+                    if isinstance(candidate, str):
+                        payload = verify_token(candidate.strip(), expected_type="access")
         if not payload:
             try:
                 ws.close()
@@ -268,25 +335,45 @@ def create_app():
 
     @app.route("/uploads/attendance/<path:filename>")
     def serve_attendance_photo(filename):
+        path = f"/uploads/attendance/{filename}"
+        if not _media_allowed(path):
+            return jsonify({"error": "Unauthorized"}), 401
         attendance_dir = os.path.join(uploads_dir, "attendance")
-        return send_from_directory(attendance_dir, filename)
+        response = send_from_directory(attendance_dir, filename)
+        response.headers["Cache-Control"] = "private, max-age=3600"
+        return response
 
     @app.route("/uploads/profiles/<path:filename>")
     def serve_profile_photo(filename):
-        return send_from_directory(profiles_dir, filename)
+        path = f"/uploads/profiles/{filename}"
+        if not _media_allowed(path):
+            return jsonify({"error": "Unauthorized"}), 401
+        response = send_from_directory(profiles_dir, filename)
+        response.headers["Cache-Control"] = "private, max-age=3600"
+        return response
 
     @app.route("/uploads/<path:filename>")
     def serve_stored_file(filename):
         """Serve files kept on local disk (the no-Cloudinary fallback)."""
-        return send_from_directory(uploads_dir, filename)
+        path = f"/uploads/{filename}"
+        if not _media_allowed(path):
+            return jsonify({"error": "Unauthorized"}), 401
+        response = send_from_directory(uploads_dir, filename)
+        response.headers["Cache-Control"] = "private, max-age=3600"
+        return response
 
     @app.route("/api/photo/<photo_id>")
     def serve_photo(photo_id):
+        path = f"/api/photo/{photo_id}"
+        if not _media_allowed(path):
+            return jsonify({"error": "Unauthorized"}), 401
         result = get_photo(photo_id)
         if result is None:
             return jsonify({"error": "Photo not found"}), 404
         raw_bytes, mime = result
-        return Response(raw_bytes, mimetype=mime)
+        response = Response(raw_bytes, mimetype=mime)
+        response.headers["Cache-Control"] = "private, max-age=3600"
+        return response
 
     @app.route("/api/upload/profile", methods=["POST"])
     @auth_required

@@ -114,8 +114,24 @@ def normalize_photo_path(photo_path):
     if not photo_path or not isinstance(photo_path, str):
         return photo_path
     if photo_path.startswith("/api/photo/"):
-        return photo_path
+        return photo_path.split("?", 1)[0]
+    if photo_path.startswith("/uploads/"):
+        # Clients may send back a signed URL from an API response; store the
+        # bare path so a later expiry cannot break the photo. Only photo
+        # folders are accepted: a photo field must not be usable to obtain a
+        # signed link to a private document.
+        bare = photo_path.split("?", 1)[0]
+        first_segment = bare[len("/uploads/"):].split("/", 1)[0]
+        if first_segment not in ("photos", "profiles", "attendance"):
+            return ""
+        if ".." in bare.split("/"):
+            return ""
+        return bare
     if not photo_path.startswith("data:"):
+        # A signed Cloudinary delivery URL must not be stored: it expires.
+        parsed = storage.parse_cloudinary_url(photo_path)
+        if parsed and parsed.get("delivery_type") == "authenticated":
+            return f"cloudinary://{parsed['resource_type']}/{parsed['public_id']}"
         return photo_path
 
     decoded = _decode_data_url(photo_path)
@@ -135,6 +151,9 @@ def delete_profile_file(photo_path):
         delete_photo(photo_path.split("/")[-1])
         return
     if photo_path.startswith("/uploads/"):
+        storage.delete(photo_path)
+        return
+    if photo_path.startswith("cloudinary://"):
         storage.delete(photo_path)
         return
     if photo_path.startswith("http://") or photo_path.startswith("https://"):

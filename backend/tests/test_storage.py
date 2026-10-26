@@ -39,12 +39,14 @@ def setUpModule():
     os.environ["AUTH_SECRET"] = "storage-test-secret"
     os.environ["ENABLE_PUSH"] = "0"
     # Make sure no ambient Cloudinary credentials leak into the tests.
+    # Assign empty strings (don't pop): backend.app loads .env with
+    # override=False, so an empty value keeps the local-disk fallback active.
     for key in (
         "CLOUDINARY_CLOUD_NAME",
         "CLOUDINARY_API_KEY",
         "CLOUDINARY_API_SECRET",
     ):
-        os.environ.pop(key, None)
+        os.environ[key] = ""
 
 
     from pymongo import MongoClient
@@ -92,6 +94,38 @@ class StorageUrlTests(unittest.TestCase):
         for url in ("", None, "/uploads/photos/x.jpg", "https://example.com/x.jpg"):
             self.assertIsNone(storage.parse_cloudinary_url(url))
 
+    def test_parses_authenticated_reference(self):
+        from backend.utils import storage
+
+        parsed = storage.parse_cloudinary_url("cloudinary://image/psm/photos/abc")
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["public_id"], "psm/photos/abc")
+        self.assertEqual(parsed["resource_type"], "image")
+        self.assertEqual(parsed["delivery_type"], "authenticated")
+        self.assertTrue(parsed["reference"])
+
+    def test_authenticated_references_are_signed_for_delivery(self):
+        from backend.utils import storage
+
+        credentials = {
+            "CLOUDINARY_CLOUD_NAME": "demo",
+            "CLOUDINARY_API_KEY": "key",
+            "CLOUDINARY_API_SECRET": "secret",
+        }
+        with mock.patch.dict(os.environ, credentials):
+            with mock.patch.object(storage, "_configure_cloudinary"):
+                with mock.patch(
+                    "cloudinary.utils.cloudinary_url",
+                    return_value=("https://signed.example/photo", {}),
+                ) as build:
+                    url = storage.delivery_url("cloudinary://image/psm/photos/abc")
+
+        self.assertEqual(url, "https://signed.example/photo")
+        _, kwargs = build.call_args
+        self.assertEqual(kwargs["type"], "authenticated")
+        self.assertTrue(kwargs["sign_url"])
+        self.assertEqual(kwargs["resource_type"], "image")
+
     def test_download_url_forces_attachment_for_raw_files(self):
         from backend.utils import storage
 
@@ -117,6 +151,91 @@ class StorageUrlTests(unittest.TestCase):
                 asset["public_id"],
             )
         ))
+
+
+class MediaTokenTests(unittest.TestCase):
+    def test_a_signed_path_verifies(self):
+        from backend.utils import media_tokens
+
+        signed = media_tokens.sign_path("/uploads/photos/a.jpg")
+        self.assertIn("exp=", signed)
+        query = dict(
+            part.split("=", 1) for part in signed.split("?", 1)[1].split("&")
+        )
+        self.assertTrue(
+            media_tokens.verify_path("/uploads/photos/a.jpg", query["exp"], query["sig"])
+        )
+
+    def test_a_tampered_path_is_rejected(self):
+        from backend.utils import media_tokens
+
+        signed = media_tokens.sign_path("/uploads/photos/a.jpg")
+        query = dict(
+            part.split("=", 1) for part in signed.split("?", 1)[1].split("&")
+        )
+        self.assertFalse(
+            media_tokens.verify_path("/uploads/photos/b.jpg", query["exp"], query["sig"])
+        )
+
+    def test_an_expired_signature_is_rejected(self):
+        from backend.utils import media_tokens
+
+        signed = media_tokens.sign_path("/uploads/photos/a.jpg", ttl=1)
+        query = dict(
+            part.split("=", 1) for part in signed.split("?", 1)[1].split("&")
+        )
+        with mock.patch("backend.utils.media_tokens.time.time", return_value=10**12):
+            self.assertFalse(
+                media_tokens.verify_path(
+                    "/uploads/photos/a.jpg", query["exp"], query["sig"]
+                )
+            )
+
+    def test_cloudinary_references_are_left_alone(self):
+        from backend.utils import media_tokens
+
+        ref = "cloudinary://image/psm/photos/a"
+        self.assertEqual(media_tokens.sign_path(ref), ref)
+
+    def test_signing_an_already_signed_path_replaces_the_signature(self):
+        from backend.utils import media_tokens
+
+        first = media_tokens.sign_path("/uploads/photos/a.jpg", ttl=60)
+        second = media_tokens.sign_path(first, ttl=60)
+        self.assertEqual(second.count("exp="), 1)
+        self.assertEqual(second.count("sig="), 1)
+        self.assertTrue(second.startswith("/uploads/photos/a.jpg?"))
+
+
+class PhotoPathTests(unittest.TestCase):
+    def test_signed_local_paths_are_normalized_to_bare_paths(self):
+        from backend.utils.photo_utils import normalize_photo_path
+
+        self.assertEqual(
+            normalize_photo_path("/uploads/photos/a.jpg?exp=1&sig=abc"),
+            "/uploads/photos/a.jpg",
+        )
+
+    def test_signed_cloudinary_urls_become_references(self):
+        from backend.utils.photo_utils import normalize_photo_path
+
+        signed = (
+            "https://res.cloudinary.com/demo/image/authenticated/v1700000000/"
+            "psm/photos/abc.jpg?expires_at=1&signature=xyz"
+        )
+        self.assertEqual(
+            normalize_photo_path(signed), "cloudinary://image/psm/photos/abc"
+        )
+
+    def test_photo_fields_cannot_point_at_documents(self):
+        from backend.utils.photo_utils import normalize_photo_path
+
+        self.assertEqual(
+            normalize_photo_path("/uploads/documents/secret.pdf"), ""
+        )
+        self.assertEqual(
+            normalize_photo_path("/uploads/photos/../documents/secret.pdf"), ""
+        )
 
 
 class ImageOptimizationTests(unittest.TestCase):
@@ -265,7 +384,7 @@ class CloudinaryBackendTests(unittest.TestCase):
         cloudinary_public_id = public_id
         full_public_id = f"{folder}/{public_id}" if folder else public_id
         return {
-            "public_id": cloudinary_public_id,
+            "public_id": full_public_id,
             "resource_type": resource_type,
             "secure_url": (
                 f"https://res.cloudinary.com/demo/{resource_type}/upload/"
@@ -274,7 +393,7 @@ class CloudinaryBackendTests(unittest.TestCase):
             "bytes": len(self.uploaded_bytes),
         }
 
-    def test_upload_uses_the_configured_folder_and_returns_a_cdn_url(self):
+    def test_upload_uses_the_configured_folder_and_returns_a_private_reference(self):
         from cloudinary import uploader
 
         from backend.utils import storage
@@ -286,9 +405,11 @@ class CloudinaryBackendTests(unittest.TestCase):
             )
 
         self.assertEqual(asset["storage"], "cloudinary")
-        self.assertTrue(asset["url"].startswith("https://res.cloudinary.com/demo/"))
+        self.assertEqual(asset["delivery_type"], "authenticated")
+        self.assertTrue(asset["url"].startswith("cloudinary://image/"))
         self.assertEqual(self.upload_options["folder"], "psm/photos")
         self.assertEqual(self.upload_options["resource_type"], "image")
+        self.assertEqual(self.upload_options["type"], "authenticated")
         self.assertNotIn("eager", self.upload_options)
 
     def test_the_returned_url_can_be_parsed_back_for_deletion(self):
@@ -304,8 +425,10 @@ class CloudinaryBackendTests(unittest.TestCase):
 
         parsed = storage.parse_cloudinary_url(asset["url"])
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed["public_id"], "psm/photos/" + asset["public_id"])
+        self.assertEqual(parsed["public_id"], asset["public_id"])
+        self.assertTrue(parsed["public_id"].startswith("psm/photos/"))
         self.assertEqual(parsed["resource_type"], "image")
+        self.assertEqual(parsed["delivery_type"], "authenticated")
 
     def test_a_failed_eager_transformation_falls_back_to_a_plain_upload(self):
         from cloudinary import uploader
@@ -331,7 +454,7 @@ class CloudinaryBackendTests(unittest.TestCase):
         self.assertIn("eager", calls[0])
         self.assertNotIn("eager", calls[1])
         self.assertEqual(asset["storage"], "cloudinary")
-        self.assertTrue(asset["url"].startswith("https://res.cloudinary.com/"))
+        self.assertTrue(asset["url"].startswith("cloudinary://image/"))
 
 
 class StorageIntegrationTests(unittest.TestCase):
@@ -385,7 +508,9 @@ class StorageIntegrationTests(unittest.TestCase):
             f"/api/documents/{doc_id}/download", headers=self.headers
         )
         self.assertEqual(download.status_code, 302)
-        self.assertTrue(download.headers["Location"].startswith("/uploads/documents/"))
+        self.assertTrue(
+            download.headers["Location"].split("?")[0].startswith("/uploads/documents/")
+        )
 
         self.client.delete(f"/api/documents/{doc_id}", headers=self.headers)
 
@@ -394,7 +519,7 @@ class StorageIntegrationTests(unittest.TestCase):
 
         res = self._upload_document()
         doc_id = res.get_json()["_id"]
-        path = res.get_json()["file_url"]
+        path = res.get_json()["file_url"].split("?")[0]
         file_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             path.lstrip("/").replace("/", os.sep),
@@ -415,7 +540,14 @@ class StorageIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
         path = res.get_json()["photo_path"]
-        self.assertTrue(path.startswith("/uploads/photos/"))
+        self.assertTrue(path.split("?")[0].startswith("/uploads/photos/"))
+
+        # Raw media paths are private; only the signed URL in the response works.
+        # Use a fresh client so the admin session cookie cannot authorize it.
+        unsigned = path.split("?")[0]
+        anonymous = self.app.test_client()
+        self.assertEqual(anonymous.get(unsigned).status_code, 401)
+        self.assertEqual(anonymous.get(path).status_code, 200)
 
     def test_support_attachment_is_stored_outside_mongo(self):
         from backend.db import get_db
@@ -460,7 +592,9 @@ class StorageIntegrationTests(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(download.status_code, 302)
-        self.assertTrue(download.headers["Location"].startswith("/uploads/attachments/"))
+        self.assertTrue(
+            download.headers["Location"].split("?")[0].startswith("/uploads/attachments/")
+        )
 
     def test_ttl_indexes_are_created(self):
         from backend.db import get_db

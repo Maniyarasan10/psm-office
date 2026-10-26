@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Firebase / Google services (never commit real config)
+google-services.json
+android/app/google-services.json
+
 # Expo
 .expo/
 dist/

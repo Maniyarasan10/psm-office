@@ -5,6 +5,8 @@ import {
   updateSupportStatus,
   updateSupportPriority,
   addSupportResponse,
+  supportAttachmentFileUrl,
+  supportAttachmentUrl,
 } from '../services/services';
 import {
   HiOutlineDownload,
@@ -38,6 +40,60 @@ const STATUS_BADGES = {
 };
 
 const PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
+
+const IMAGE_EXTENSION_RE = /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i;
+
+function isImageAttachment(attachment) {
+  const mime = attachment.mime || '';
+  if (mime.startsWith('image/')) return true;
+  return IMAGE_EXTENSION_RE.test(attachment.file_name || '');
+}
+
+/**
+ * One employee/support attachment. Images render inline from the signed URL the
+ * API returned; the download link goes through the authenticated endpoint.
+ */
+function AttachmentRow({ attachment }) {
+  const src = supportAttachmentFileUrl(attachment.file_url);
+  const image = isImageAttachment(attachment);
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      {image && src ? (
+        <a href={src} target="_blank" rel="noreferrer" title="Open full image">
+          <img
+            src={src}
+            alt={attachment.file_name || 'Attachment'}
+            style={{
+              display: 'block',
+              maxWidth: '100%',
+              maxHeight: 260,
+              borderRadius: 8,
+              border: '1px solid var(--border-light)',
+              background: 'var(--bg-input)',
+              objectFit: 'contain',
+            }}
+          />
+        </a>
+      ) : null}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: image ? 6 : 0 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+          {attachment.file_name || 'Attachment'}
+        </span>
+        <a
+          className="btn btn-sm btn-outline"
+          href={supportAttachmentUrl(attachment.attachment_id)}
+          target="_blank"
+          rel="noreferrer"
+          download
+          style={{ textDecoration: 'none', flexShrink: 0 }}
+        >
+          <HiOutlineDownload size={14} /> {image ? 'Open' : 'Download'}
+        </a>
+      </div>
+    </div>
+  );
+}
 
 export default function Support() {
   const [requests, setRequests] = useState([]);
@@ -152,6 +208,7 @@ export default function Support() {
     try {
       const formData = new FormData();
       formData.append('body', replyBody.trim());
+      formData.append('author_type', 'support');
       await addSupportResponse(selectedTicket._id, formData);
       setReplyBody('');
       flash('success', 'Response added to the ticket.');
@@ -393,6 +450,22 @@ export default function Support() {
               </div>
 
               <div className="section-card" style={{ marginTop: 20 }}>
+                <h3>Description</h3>
+                <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', marginTop: 8 }}>
+                  {selectedTicket.description || '-'}
+                </div>
+              </div>
+
+              {(selectedTicket.attachments || []).length > 0 && (
+                <div className="section-card" style={{ marginTop: 20 }}>
+                  <h3>Attachments ({selectedTicket.attachments.length})</h3>
+                  {selectedTicket.attachments.map((attachment) => (
+                    <AttachmentRow key={attachment.attachment_id} attachment={attachment} />
+                  ))}
+                </div>
+              )}
+
+              <div className="section-card" style={{ marginTop: 20 }}>
                 <h3>Change Status</h3>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {STATUS_ORDER.map((s) => {
@@ -462,6 +535,9 @@ export default function Support() {
                           <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{c.created_at || ''}</span>
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{c.body}</div>
+                        {(c.attachments || []).map((attachment) => (
+                          <AttachmentRow key={attachment.attachment_id} attachment={attachment} />
+                        ))}
                       </div>
                     ))}
                   </div>

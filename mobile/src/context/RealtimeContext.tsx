@@ -22,6 +22,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     if (loading) {
       return;
     }
+    if (!employee) {
+      realtimeClient.stop();
+      return;
+    }
     void realtimeClient.start();
     return () => {
       realtimeClient.stop();

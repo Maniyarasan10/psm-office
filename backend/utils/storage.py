@@ -17,6 +17,7 @@ import io
 import logging
 import os
 import re
+import time
 import uuid
 from urllib.parse import urlsplit
 
@@ -35,6 +36,7 @@ _STORAGE_CLOUDINARY = "cloudinary"
 _STORAGE_LOCAL = "local"
 
 _CLOUDINARY_HOST = "res.cloudinary.com"
+_REF_SCHEME = "cloudinary://"
 _DELIVERY_TYPES = ("upload", "asset", "private", "authenticated", "fetch")
 _VERSION_RE = re.compile(r"^v\d{4,}$")
 
@@ -102,6 +104,22 @@ def parse_cloudinary_url(url):
     """
     if not url or not isinstance(url, str):
         return None
+
+    # New private assets store a credential-free reference such as
+    # ``cloudinary://image/psm/photos/<id>``. Signing happens at delivery time.
+    if url.startswith(_REF_SCHEME):
+        rest = url[len(_REF_SCHEME):]
+        resource_type, _, public_id = rest.partition("/")
+        if not public_id or resource_type not in ("image", "raw", "video"):
+            return None
+        return {
+            "public_id": public_id,
+            "resource_type": resource_type,
+            "delivery_type": "authenticated",
+            "reference": True,
+            "url": url,
+        }
+
     if not url.startswith("http://") and not url.startswith("https://"):
         return None
     try:
@@ -143,11 +161,60 @@ def parse_cloudinary_url(url):
         if head and tail.isalnum() and len(tail) <= 8:
             public_id = head
 
-    return {"public_id": public_id, "resource_type": resource_type, "url": url}
+    return {"public_id": public_id, "resource_type": resource_type, "url": url,
+            "delivery_type": segments[delivery_index], "reference": False}
 
 
 def is_cloudinary_url(url):
     return parse_cloudinary_url(url) is not None
+
+
+def delivery_url(url, ttl=None):
+    """Turn a stored asset reference into a delivery URL.
+
+    Authenticated Cloudinary references are converted into a short-lived signed
+    URL. Local paths and legacy public URLs are returned unchanged.
+    """
+    parsed = parse_cloudinary_url(url)
+    if not parsed or not parsed.get("reference"):
+        return url
+    if not cloudinary_ready():
+        return url
+    try:
+        _configure_cloudinary()
+        from cloudinary.utils import cloudinary_url as build_url
+
+        try:
+            ttl_seconds = int(ttl or os.getenv("MEDIA_URL_TTL_SECONDS", 86400))
+        except (TypeError, ValueError):
+            ttl_seconds = 86400
+        expires_at = int(time.time()) + max(60, ttl_seconds)
+        signed, _ = build_url(
+            parsed["public_id"],
+            resource_type=parsed["resource_type"],
+            type="authenticated",
+            sign_url=True,
+            secure=config.cloudinary_secure(),
+            expires_at=expires_at,
+        )
+        return signed or url
+    except Exception:
+        logger.exception("Could not sign Cloudinary URL for %s", parsed["public_id"])
+        return url
+
+
+def view_url(url, ttl=None):
+    """Delivery URL suitable for inline viewing (images, PDF previews)."""
+    parsed = parse_cloudinary_url(url)
+    if parsed and parsed.get("reference"):
+        return delivery_url(url, ttl=ttl)
+    if isinstance(url, str) and (
+        url.startswith("/uploads/") or url.startswith("/api/photo/")
+    ):
+        from backend.utils.media_tokens import sign_path
+
+        return sign_path(url, ttl=ttl)
+    return url
 
 
 def _cloudinary_upload(raw_bytes, filename, kind, resource_type, content_type):
@@ -160,11 +227,16 @@ def _cloudinary_upload(raw_bytes, filename, kind, resource_type, content_type):
     if len(raw_bytes) > max_bytes:
         raise StorageError(f"File exceeds the {max_bytes // (1024 * 1024)}MB limit")
 
+    # Photos are private: upload them as authenticated assets so the CDN
+    # refuses unsigned delivery. Documents keep the historical public type
+    # until they are migrated.
+    delivery_type = "authenticated" if kind == KIND_PHOTOS else "upload"
+
     options = {
         "folder": folder,
         "public_id": public_id,
         "resource_type": resource_type,
-        "type": "upload",
+        "type": delivery_type,
         "overwrite": False,
         "use_filename": False,
         "unique_filename": False,
@@ -189,7 +261,13 @@ def _cloudinary_upload(raw_bytes, filename, kind, resource_type, content_type):
         result = uploader.upload(io.BytesIO(raw_bytes), **options)
 
     url = result.get("secure_url") or result.get("url") or ""
-    if not url:
+    stored_public_id = result.get("public_id") or public_id
+    stored_resource_type = result.get("resource_type") or resource_type
+    if delivery_type == "authenticated":
+        # Do not persist a delivery URL for private assets; it would either be
+        # unsigned (and rejected by Cloudinary) or expire.
+        url = f"{_REF_SCHEME}{stored_resource_type}/{stored_public_id}"
+    elif not url:
         raise StorageError("Cloudinary did not return a delivery URL")
     if url.startswith("http://") and config.cloudinary_secure():
         url = "https://" + url[len("http://"):]
@@ -197,8 +275,9 @@ def _cloudinary_upload(raw_bytes, filename, kind, resource_type, content_type):
     return {
         "url": url,
         "storage": _STORAGE_CLOUDINARY,
-        "public_id": result.get("public_id") or public_id,
-        "resource_type": result.get("resource_type") or resource_type,
+        "public_id": stored_public_id,
+        "resource_type": stored_resource_type,
+        "delivery_type": delivery_type,
         "bytes": result.get("bytes") or len(raw_bytes),
         "content_type": content_type or result.get("resource_type"),
         "filename": filename,
@@ -283,11 +362,15 @@ def delete(url):
 
     parsed = parse_cloudinary_url(url)
     if parsed:
-        return delete_by_public_id(parsed["public_id"], parsed["resource_type"])
+        return delete_by_public_id(
+            parsed["public_id"],
+            parsed["resource_type"],
+            parsed.get("delivery_type") or "upload",
+        )
 
     if url.startswith("/uploads/"):
         base = os.path.normpath(_backend_dir())
-        relative = url[len("/uploads/"):]
+        relative = url[len("/uploads/"):].split("?", 1)[0]
         path = os.path.normpath(os.path.join(base, relative))
         if not path.startswith(base + os.sep):
             return False
@@ -300,18 +383,21 @@ def delete(url):
     return False
 
 
-def delete_by_public_id(public_id, resource_type="image"):
+def delete_by_public_id(public_id, resource_type="image", delivery_type="upload"):
     """Delete a Cloudinary asset by its public id."""
     if not public_id:
         return False
     if not cloudinary_ready():
         return False
     try:
-        cloudinary = _configure_cloudinary()
+        _configure_cloudinary()
         from cloudinary import uploader
 
         result = uploader.destroy(
-            public_id, resource_type=resource_type, invalidate=True
+            public_id,
+            resource_type=resource_type,
+            type=delivery_type,
+            invalidate=True,
         )
         return str(result.get("result", "")).lower() in ("ok", "not found")
     except Exception:
@@ -325,9 +411,17 @@ def download_url(url, filename=None):
         return url
     parsed = parse_cloudinary_url(url)
     if not parsed:
+        if isinstance(url, str) and (
+            url.startswith("/uploads/") or url.startswith("/api/photo/")
+        ):
+            from backend.utils.media_tokens import sign_path
+
+            return sign_path(url)
         return url
+    if parsed.get("reference"):
+        return delivery_url(url)
     if parsed["resource_type"] != "raw":
-        return url
+        return view_url(url)
     separator = "&" if "?" in url else "?"
     suffix = filename or "download"
     return f"{url}{separator}fl_attachment={suffix}"

@@ -1,23 +1,32 @@
-﻿import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ENV } from '../config/env';
-import { AUTH_TOKEN_KEY } from './api';
+﻿import { ENV } from '../config/env';
+import { getAuthToken as getStoredAccessToken } from './api';
+
 export type RealtimeEvent = { type: string; [key: string]: any };
 export type RealtimeEventType = RealtimeEvent;
 type Listener = (evt: RealtimeEvent) => void;
 type FilteredListener = (evt: any) => void;
+
 function getWsUrl(): string {
   let base = ENV.API_BASE_URL;
-  if (base.startsWith('https://')) base = base.replace('https://', 'wss://');
-  else if (base.startsWith('http://')) base = base.replace('http://', 'ws://');
+  if (!base.startsWith('https://')) {
+    throw new Error('WebSocket requires an HTTPS base URL');
+  }
+  base = base.replace('https://', 'wss://');
   if (base.endsWith('/api')) base = base.slice(0, -4);
   return base + '/api/ws';
 }
+
 export class RealtimeClient {
   private ws: WebSocket | null = null;
   private reconnectTimer: any = null;
   private listeners = new Set<Listener>();
-  private retry = 0; private maxRetry = 10; private backoff = 1000; private stopped = false; private urlWithToken: string | null = null;
+  private token: string | null = null;
+  private retry = 0;
+  private maxRetry = 10;
+  private backoff = 1000;
+  private stopped = false;
   private _connected = false;
+
   on(listener: Listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   off(listener: Listener) { this.listeners.delete(listener); }
   subscribe(typeOrListener: string | Listener, maybeListener?: FilteredListener) {
@@ -34,38 +43,46 @@ export class RealtimeClient {
     this.listeners.forEach((l) => { try { (l as any)(e); } catch {} });
   }
   async getAuthToken(): Promise<string | null> {
-    try { const t = await AsyncStorage.getItem(AUTH_TOKEN_KEY); if (t) return t; } catch {}
-    try { const t = await AsyncStorage.getItem('authToken'); if (t) return t; } catch {}
-    try { const t2 = await AsyncStorage.getItem('token'); if (t2) return t2; } catch {}
-    return null;
+    try { return await getStoredAccessToken(); } catch { return null; }
   }
   async start() {
-    if (this.stopped) return;
-    try { (console as any).warn('[RT] start()'); } catch {}
+    // A fresh start is allowed after stop() (logout followed by a new login).
+    this.stopped = false;
+    if (this.ws) return;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
 
     const token = await this.getAuthToken();
-    try { (console as any).warn('[RT] token?', !!token); } catch {}
-    const base = getWsUrl();
-    try { (console as any).warn('[RT] base=', base); } catch {}
+    // stop() may have run while the token was loading.
+    if (this.stopped || this.ws) return;
     if (!token) { this.scheduleReconnect(2000); return; }
-    this.urlWithToken = base + '?token=' + encodeURIComponent(token);
+    this.token = token;
     this.open();
   }
   stop() {
     this.stopped = true;
+    this.token = null;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
     if (this.ws) { try { this.ws.close(); } catch {}; this.ws = null; }
     this._connected = false;
   }
   private open() {
-    if (this.stopped || !this.urlWithToken) return;
+    if (this.stopped) return;
     try {
-      try { (console as any).warn('[RT] new WebSocket'); } catch {}
-      this.ws = new WebSocket(this.urlWithToken);
+      this.ws = new WebSocket(getWsUrl());
     } catch (e) { this.scheduleReconnect(this.backoff); return; }
-    this.ws.onopen = () => { this.retry = 0; this.backoff = 1000; this._connected = true; this.emit({ type: 'connected' }); };
+    this.ws.onopen = () => {
+      this.retry = 0;
+      this.backoff = 1000;
+      // Authenticate in the first frame so the token never appears in the
+      // WebSocket URL (and therefore never in proxy/server access logs).
+      if (this.token) {
+        try { this.ws?.send(JSON.stringify({ type: 'auth', token: this.token })); } catch {}
+      }
+      this._connected = true;
+      this.emit({ type: 'connected' });
+    };
     this.ws.onmessage = (ev) => { try { const d = JSON.parse((ev as any).data as string); this.emit(d as RealtimeEvent); } catch {} };
-    this.ws.onclose = (ev) => { this.ws = null; this._connected = false; this.emit({ type: 'disconnected', code: (ev as any).code, reason: (ev as any).reason }); this.scheduleReconnect(this.backoff); };
+    this.ws.onclose = (ev) => { this.ws = null; this.token = null; this._connected = false; this.emit({ type: 'disconnected', code: (ev as any).code, reason: (ev as any).reason }); this.scheduleReconnect(this.backoff); };
     this.ws.onerror = () => {};
   }
   private scheduleReconnect(delay: number) {

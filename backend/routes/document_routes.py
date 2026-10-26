@@ -240,7 +240,7 @@ def view_doc(doc_id):
         return jsonify({"error": "Forbidden"}), 403
     path = doc.get("file_path")
     if path:
-        return redirect(path, code=302)
+        return redirect(storage.view_url(path), code=302)
     return jsonify({"error": "File not found"}), 404
 
 

@@ -19,6 +19,8 @@ export function setupNotificationHandler(): void {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
       shouldPlaySound: true,
       shouldSetBadge: false,
     }),
@@ -151,7 +153,7 @@ export async function getLastNotificationResponse(): Promise<Notifications.Notif
 }
 
 export function removeNotificationSubscription(subscription: Notifications.Subscription): void {
-  Notifications.removeNotificationSubscription(subscription);
+  subscription.remove();
 }
 
 export { CHANNEL_ID };

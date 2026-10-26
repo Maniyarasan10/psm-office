@@ -7,6 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon_app.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -35,13 +36,16 @@
       "icon": "./assets/icon_app.png",
       "allowBackup": false,
       "permissions": [
-        "CAMERA",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "blockedPermissions": [
         "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "com.google.android.gms.permission.AD_ID"
       ],
       "versionCode": 1
     },
@@ -52,15 +56,16 @@
     },
     "plugins": [
       [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow PSM Office to access your camera for attendance verification."
-        }
-      ],
-      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow PSM Office to use your location for geotag attendance."
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow PSM Office to protect your saved session with Face ID."
         }
       ],
       [

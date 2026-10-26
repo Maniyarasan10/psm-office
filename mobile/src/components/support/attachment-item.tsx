@@ -13,7 +13,7 @@ import { SupportAttachment } from '../../types';
 import { colors, spacing, radius, typography } from '../../theme';
 import { Button } from '../ui/button';
 import { isPreviewableImage, useDocumentFile } from '../../hooks/useDocumentFile';
-import { supportAttachmentUrl } from '../../services/api';
+import { resolveMediaUrl, supportAttachmentUrl } from '../../services/api';
 import { fileTypeIcon, formatFileSize } from '../../utils/documents';
 
 interface AttachmentItemProps {
@@ -26,12 +26,16 @@ interface AttachmentItemProps {
  */
 export default function AttachmentItem({ attachment }: AttachmentItemProps) {
   const previewable = isPreviewableImage(attachment.file_type);
+  // Prefer the signed URL the API already returned: it loads without needing
+  // the bearer token and works for both local-disk and Cloudinary storage.
+  const directUrl = resolveMediaUrl(attachment.file_url);
   const { previewUri, downloading, saving, savedPath, error, downloadPreview, saveToDevice } =
     useDocumentFile(
       attachment.attachment_id,
       attachment.file_name,
       attachment.file_type,
-      supportAttachmentUrl
+      supportAttachmentUrl,
+      directUrl
     );
   const [showPreview, setShowPreview] = useState(false);
 

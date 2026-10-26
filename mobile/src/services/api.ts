@@ -1,5 +1,7 @@
 import axios, { AxiosProgressEvent, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureGetItem, secureSetItem, secureDeleteItem, secureMultiDelete } from './secureStorage';
+import { ENV } from '../config/env';
+import type { ServerNotification } from '../notifications/types';
 import {
   Employee,
   AttendanceRecord,
@@ -16,40 +18,101 @@ import {
   BirthdayEntry,
   Announcement,
   PersonalCalendarItem,
+  DailyReport,
 } from '../types';
-import ENV from '../config/env';
-import type { ServerNotification } from '../notifications/types';
 
 const API_BASE = ENV.API_BASE_URL;
 
-const HOST = API_BASE.replace(/\/api\/?$/, '');
+export const API_HOST = API_BASE.replace(/\/api\/?$/, '');
+const HOST = API_HOST;
+
+/** Turns a stored media path (or absolute CDN URL) into a loadable URL. */
+export const resolveMediaUrl = (path: string | null | undefined): string | null => {
+  if (!path) return null;
+  if (path.startsWith('data:')) return path;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (path.startsWith('/')) return `${HOST}${path}`;
+  return path;
+};
 
 export const AUTH_TOKEN_KEY = 'psm_auth_token';
 export const AUTH_REFRESH_TOKEN_KEY = 'psm_auth_refresh_token';
 
 let authToken: string | null = null;
+let authTokenExp: number | null = null;
+
+/**
+ * The server signs compact ``body.signature`` tokens (not JWT). The body is
+ * URL-safe base64 encoded JSON, so it must be decoded from index 0 with the
+ * base64url alphabet padded back to a multiple of four.
+ */
+const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
+  try {
+    const body = token.split('.', 1)[0];
+    if (!body) return null;
+    const base64 = body.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const parsed: unknown = JSON.parse(atob(padded));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+};
 
 /** Remember the bearer token for the current session (in memory). */
 export const setAuthToken = (token: string | null): void => {
   authToken = token;
+  authTokenExp = null;
+  if (token) {
+    const payload = decodeTokenPayload(token);
+    if (payload && typeof payload.exp === 'number') {
+      authTokenExp = payload.exp * 1000;
+    }
+  }
 };
 
 export const clearAuthToken = (): void => {
   authToken = null;
+  authTokenExp = null;
 };
 
 /**
- * Returns the current bearer token for the session, restoring it from storage
- * if it has not been loaded yet. Used to authenticate the realtime socket.
+ * Returns the current bearer token for the session, restoring it from secure
+ * storage if it has not been loaded yet. Returns null if the token has expired.
  */
 export const getAuthToken = async (): Promise<string | null> => {
-  if (authToken) return authToken;
+  if (authToken) {
+    if (authTokenExp != null && Date.now() >= authTokenExp - 60000) {
+      // Token expires within 1 minute; treat as expired so refresh can run.
+      return null;
+    }
+    return authToken;
+  }
   try {
-    authToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+    const stored = await secureGetItem(AUTH_TOKEN_KEY);
+    if (stored) {
+      setAuthToken(stored);
+      if (authTokenExp != null && Date.now() >= authTokenExp - 60000) {
+        return null;
+      }
+      return authToken;
+    }
   } catch {
     authToken = null;
   }
-  return authToken;
+  return null;
+};
+
+/** Returns true when the stored access token is present and not near expiry. */
+export const isTokenValid = async (): Promise<boolean> => {
+  const token = await getAuthToken();
+  return token != null;
+};
+
+/** Get the remaining seconds until the access token expires (null if unknown). */
+export const getTokenExpiryInSeconds = (): number | null => {
+  if (authTokenExp == null) return null;
+  return Math.max(0, Math.round((authTokenExp - Date.now()) / 1000));
 };
 
 /** Called when a session can no longer be restored (refresh failed/expired). */
@@ -67,7 +130,7 @@ async function attemptTokenRefresh(): Promise<boolean> {
 
   refreshInFlight = (async () => {
     try {
-      const refreshToken = await AsyncStorage.getItem(AUTH_REFRESH_TOKEN_KEY);
+      const refreshToken = await secureGetItem(AUTH_REFRESH_TOKEN_KEY);
       if (!refreshToken) return false;
       const res = await api.post<{ token?: string; refresh_token?: string }>(
         '/auth/refresh-token',
@@ -75,11 +138,13 @@ async function attemptTokenRefresh(): Promise<boolean> {
       );
       const nextToken = res.data?.token;
       if (!nextToken) return false;
-      authToken = nextToken;
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+      setAuthToken(nextToken);
+      await secureSetItem(AUTH_TOKEN_KEY, nextToken);
       const nextRefresh = res.data?.refresh_token;
       if (nextRefresh) {
-        await AsyncStorage.setItem(AUTH_REFRESH_TOKEN_KEY, nextRefresh);
+        // Rotation: replace the old refresh token with the new one.
+        await secureDeleteItem(AUTH_REFRESH_TOKEN_KEY);
+        await secureSetItem(AUTH_REFRESH_TOKEN_KEY, nextRefresh);
       }
       return true;
     } catch {
@@ -92,6 +157,22 @@ async function attemptTokenRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/** Revoke tokens on the server and clear local state (used on logout). */
+export const revokeTokens = async (): Promise<void> => {
+  try {
+    const token = await getAuthToken();
+    const refreshToken = await secureGetItem(AUTH_REFRESH_TOKEN_KEY);
+    if (token || refreshToken) {
+      await api.post('/auth/logout', {
+        token: token ?? undefined,
+        refresh_token: refreshToken ?? undefined,
+      }).catch(() => {});
+    }
+  } catch {
+    // Best-effort revoke; local state is cleared regardless.
+  }
+};
+
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
@@ -99,15 +180,9 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(async config => {
-  if (!authToken) {
-    try {
-      authToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-    } catch {
-      authToken = null;
-    }
-  }
-  if (authToken) {
-    config.headers.Authorization = `Bearer ${authToken}`;
+  const token = await getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -129,8 +204,11 @@ api.interceptors.response.use(
         retriedConfig.headers.Authorization = `Bearer ${authToken}`;
         return api.request(retriedConfig);
       }
+      // Refresh failed: revoke server-side and clear local state.
+      await revokeTokens();
       authToken = null;
-      await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY]).catch(() => {});
+      authTokenExp = null;
+      await secureMultiDelete([AUTH_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY]).catch(() => {});
       onAuthFailure?.();
     }
     return Promise.reject(error);
@@ -330,6 +408,19 @@ export const submitLeaveRequest = (leaveType: string, startDate: string, endDate
 /** Leave requests submitted by the signed-in person (newest first). */
 export const getMyLeaveRequests = (personId: string, personType: string = 'employee'): Promise<AxiosResponse<{ requests: LeaveRequest[]; total: number }>> =>
   api.get('/leave', { params: { person_id: personId, person_type: personType } });
+
+/** Submit (or update) today's work-progress report. */
+export const submitReport = (
+  payload: { date?: string; content: string; tasks_done?: string[]; hours?: number }
+): Promise<AxiosResponse<{ message: string; report: DailyReport }>> =>
+  api.post('/reports', payload);
+
+/** The signed-in person's daily work reports (newest first). */
+export const getMyReports = (
+  personId: string,
+  personType: string = 'employee'
+): Promise<AxiosResponse<{ reports: DailyReport[] }>> =>
+  api.get('/reports/mine', { params: { person_id: personId, person_type: personType } });
 
 export const getDocuments = (search?: string): Promise<AxiosResponse<EmployeeDocument[]>> =>
   api.get('/documents', { params: search ? { search } : undefined });

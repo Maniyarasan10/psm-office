@@ -43,6 +43,7 @@ import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import CalendarHomeScreen from './src/screens/CalendarHomeScreen';
 import CalendarItemScreen from './src/screens/CalendarItemScreen';
 import WorkSummaryScreen from './src/screens/WorkSummaryScreen';
+import SubmitReportScreen from './src/screens/SubmitReportScreen';
 import WorkScreen from './src/screens/WorkScreen';
 import ProjectDetailScreen from './src/screens/ProjectDetailScreen';
 import SearchScreen from './src/screens/SearchScreen';
@@ -306,6 +307,7 @@ function AppNavigator() {
           <Stack.Screen name='More' component={MoreStackNavigator} />
           <Stack.Screen name='Leave' component={LeaveStackNavigator} />
           <Stack.Screen name='WorkSummary' component={WorkSummaryScreen} />
+          <Stack.Screen name='SubmitReport' component={SubmitReportScreen} />
           <Stack.Screen name='Search' component={SearchScreen} />
         </>
       )}

@@ -216,6 +216,22 @@ export type WorkStackParamList = {
   ProjectDetail: { projectId: string };
 };
 
+/** A daily work-progress report submitted by one person for one date. */
+export interface DailyReport {
+  _id: string;
+  person_type: string;
+  person_id: string;
+  name?: string;
+  date: string;
+  content: string;
+  tasks_done: string[];
+  hours?: number | null;
+  status: string;
+  submitted_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface EmployeeDocument {
   _id: string;
   file_name: string;
@@ -247,6 +263,7 @@ export interface SupportAttachment {
   file_type?: string;
   mime?: string;
   file_size?: number;
+  file_url?: string;
 }
 
 export interface SupportComment {
@@ -367,6 +384,7 @@ export type RootStackParamList = {
   More: NavigatorScreenParams<MoreStackParamList> | undefined;
   Leave: NavigatorScreenParams<LeaveStackParamList> | undefined;
   WorkSummary: undefined;
+  SubmitReport: { reportId?: string } | undefined;
   Search: undefined;
 };
 
@@ -398,4 +416,5 @@ export type TabParamList = {
   Dashboard: undefined;
   Work: NavigatorScreenParams<WorkStackParamList> | undefined;
   Announcements: undefined;
+  Reports: undefined;
 };

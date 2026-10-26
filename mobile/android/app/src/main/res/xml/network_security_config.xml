@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <!-- Cleartext traffic is never permitted. All API traffic must use TLS. -->
+  <domain-config cleartextTrafficPermitted="false">
+    <domain includeSubdomains="true">psm-office-api-84c884d6ab34.herokuapp.com</domain>
+    <domain includeSubdomains="true">exp.host</domain>
+  </domain-config>
+
+  <!-- Base configuration: system CAs only, no user-added CAs trusted. -->
+  <base-config cleartextTrafficPermitted="false">
+    <trust-anchors>
+      <certificates src="system"/>
+    </trust-anchors>
+  </base-config>
+</network-security-config>
