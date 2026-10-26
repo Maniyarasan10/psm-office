@@ -23,3 +23,24 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+// CMake can invoke clang++.exe through its 8.3 short name (CLANG_~1.EXE) when
+// paths contain spaces. The driver then falls back to C mode and does not
+// auto-link libc++, producing undefined std::__ndk1 symbols. Pass the STL
+// explicitly to every native Android module.
+subprojects { subproject ->
+  ["com.android.application", "com.android.library"].each { pluginId ->
+    subproject.plugins.withId(pluginId) {
+      subproject.android {
+        defaultConfig {
+          externalNativeBuild {
+            cmake {
+              arguments "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
+                "-DCMAKE_CXX_STANDARD_LIBRARIES=-lc++ -latomic -lm"
+            }
+          }
+        }
+      }
+    }
+  }
+}
