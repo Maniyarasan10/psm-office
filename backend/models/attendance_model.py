@@ -9,12 +9,75 @@ def _to_oid(id_str):
         return id_str
 
 
+def _person_type(value):
+    return "intern" if str(value or "").lower().startswith("intern") else "employee"
+
+
+def attach_person_names(records):
+    """Resolve ``person_id`` values to employee/intern display names.
+
+    Attendance documents store the person's ObjectId (or, for older records,
+    their employee/intern code). The dashboard and reports need a human-readable
+    name, so resolve them in batches instead of showing a raw id.
+    """
+    db = get_db()
+    if db is None or not records:
+        return records
+
+    lookups = {
+        "employee": {"oids": set(), "codes": set()},
+        "intern": {"oids": set(), "codes": set()},
+    }
+    for record in records:
+        person_id = record.get("person_id")
+        if not person_id:
+            continue
+        person_type = _person_type(record.get("person_type"))
+        try:
+            lookups[person_type]["oids"].add(ObjectId(person_id))
+        except Exception:
+            lookups[person_type]["codes"].add(str(person_id))
+
+    labels = {}
+    for person_type, values in lookups.items():
+        oids = values["oids"]
+        codes = values["codes"]
+        if not oids and not codes:
+            continue
+        collection = db.interns if person_type == "intern" else db.employees
+        id_field = "intern_id" if person_type == "intern" else "employee_id"
+        clauses = []
+        if oids:
+            clauses.append({"_id": {"$in": list(oids)}})
+        if codes:
+            clauses.append({id_field: {"$in": list(codes)}})
+        query = clauses[0] if len(clauses) == 1 else {"$or": clauses}
+        for doc in collection.find(query, {"name": 1, id_field: 1}):
+            label = (doc.get("name") or "").strip() or (doc.get(id_field) or "").strip()
+            if not label:
+                continue
+            labels[(person_type, str(doc["_id"]))] = label
+            if doc.get(id_field):
+                labels[(person_type, str(doc[id_field]))] = label
+
+    for record in records:
+        person_type = _person_type(record.get("person_type"))
+        person_id = str(record.get("person_id") or "")
+        existing_name = (record.get("person_name") or record.get("name") or "").strip()
+        record["name"] = (
+            labels.get((person_type, person_id))
+            or existing_name
+            or "Unknown"
+        )
+    return records
+
+
 def for_date(target_date):
     db = get_db()
     if isinstance(target_date, str):
         target_date = date_type.fromisoformat(target_date)
     docs = list(db.attendance.find({"date": target_date.isoformat()}))
-    return [serialize_doc(d) for d in docs]
+    return attach_person_names([serialize_doc(d) for d in docs])
 
 
 def mark(person_type, person_id, target_date, status="Present",
@@ -241,7 +304,7 @@ def monthly_report(year, month):
     docs = list(db.attendance.find({
         "date": {"$gte": start.isoformat(), "$lt": end.isoformat()}
     }).sort("date", 1))
-    return [serialize_doc(d) for d in docs]
+    return attach_person_names([serialize_doc(d) for d in docs])
 
 
 def report_between(start_date, end_date):
@@ -253,7 +316,7 @@ def report_between(start_date, end_date):
     docs = list(db.attendance.find({
         "date": {"$gte": start_date.isoformat(), "$lte": end_date.isoformat()}
     }).sort("date", 1))
-    return [serialize_doc(d) for d in docs]
+    return attach_person_names([serialize_doc(d) for d in docs])
 
 
 def report_summary_between(start_date, end_date):
@@ -265,7 +328,8 @@ def report_summary_between(start_date, end_date):
     docs = list(db.attendance.find({
         "date": {"$gte": start_date.isoformat(), "$lte": end_date.isoformat()}
     }))
-    
+    docs = attach_person_names([serialize_doc(d) for d in docs])
+
     summary = {}
     for doc in docs:
         pid = doc.get("person_id")
@@ -273,17 +337,9 @@ def report_summary_between(start_date, end_date):
         
         if pid not in summary:
             ptype = doc.get("person_type", "employee")
-            name = "Unknown"
-            if ptype.lower() == "employee":
-                emp = db.employees.find_one({"_id": _to_oid(pid)})
-                if emp: name = emp.get("name", "Unknown")
-            elif ptype.lower() == "intern":
-                intern = db.interns.find_one({"_id": _to_oid(pid)})
-                if intern: name = intern.get("name", "Unknown")
-                
             summary[pid] = {
                 "person_id": pid,
-                "name": name,
+                "name": doc.get("name") or "Unknown",
                 "person_type": ptype,
                 "present": 0,
                 "absent": 0,

@@ -25,13 +25,11 @@ export default function Attendance() {
   const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
 
   const displayName = (person) => {
-    const name = person.name || '';
-     // If the name field literally holds a MongoDB ObjectId, fall back to the
-     // employee/intern ID so a raw ObjectId never shows in the UI.
-    if (OBJECT_ID_RE.test(name.trim())) {
-      return person.employee_id || person.name || 'Unknown';
-    }
-    return name || person.employee_id || 'Unknown';
+    const name = String(person.name || '').trim();
+    const employeeId = String(person.employee_id || '').trim();
+    if (name && !OBJECT_ID_RE.test(name)) return name;
+    if (employeeId && !OBJECT_ID_RE.test(employeeId)) return employeeId;
+    return 'Unknown';
   };
 
   useEffect(() => {

@@ -9,6 +9,14 @@ import {
   HiOutlineFolder, HiOutlinePencil, HiOutlineClipboardCheck,
 } from 'react-icons/hi';
 
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+const attendanceName = (attendance) => {
+  const name = (attendance.name || '').trim();
+  if (name && !OBJECT_ID_RE.test(name)) return name;
+  return attendance.employee_id || 'Unknown';
+};
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +106,7 @@ export default function Dashboard() {
                     />
                   )}
                   <div>
-                    <div className="activity-text">{att.name || att.person_id}</div>
+                    <div className="activity-text">{attendanceName(att)}</div>
                     <div className="activity-time">{att.status} {att.clock_in ? `- In: ${att.clock_in}` : ''} {att.clock_out ? `Out: ${att.clock_out}` : ''}</div>
                   </div>
                 </div>
