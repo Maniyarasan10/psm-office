@@ -133,6 +133,21 @@ def activity_log_ttl_days():
     return _int_env("ACTIVITY_LOG_TTL_DAYS", 180)
 
 
+def daily_report_reminder_enabled():
+    """Whether the daily 7 PM work-report reminder push is active."""
+    return _bool_env("DAILY_REPORT_REMINDER", True)
+
+
+def report_reminder_hour():
+    """Hour (local server time) the daily report reminder fires."""
+    return _int_env("REPORT_REMINDER_HOUR", 19)
+
+
+def report_reminder_minute():
+    """Minute the daily report reminder fires."""
+    return _int_env("REPORT_REMINDER_MINUTE", 0)
+
+
 def legacy_photo_ttl_days():
     """Retention for photos that still live inside MongoDB (pre-Cloudinary)."""
     return _int_env("LEGACY_PHOTO_TTL_DAYS", 30)

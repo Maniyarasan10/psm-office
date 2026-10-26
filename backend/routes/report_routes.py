@@ -1,12 +1,38 @@
 import os
 import io
+from bson import ObjectId
 from flask import Blueprint, request, jsonify, send_file
 from backend.db import get_db, serialize_doc
 from backend.models.attendance_model import report_between
+from backend.models.report_model import (
+    add_report,
+    get_report,
+    list_reports,
+    reports_for_person,
+)
 from datetime import date as date_type
-from backend.utils.auth import admin_required
+from backend.utils.auth import admin_required, auth_required, current_auth
 
 report_bp = Blueprint("reports", __name__)
+
+
+def _to_oid(id_str):
+    try:
+        return ObjectId(id_str)
+    except Exception:
+        return id_str
+
+
+def _person_from_auth():
+    auth = current_auth()
+    if not auth:
+        return None, None
+    role = auth.get("role")
+    person_id = auth.get("sub")
+    person_type = auth.get("person_type", "employee")
+    if role == "admin":
+        return "admin", person_id
+    return person_type, person_id
 
 
 @report_bp.route("/api/reports/export/<format_type>", methods=["GET"])
@@ -84,6 +110,118 @@ def export_report(format_type):
         return _export_pdf(report_type, headers, rows)
     else:
         return jsonify({"error": "Invalid format"}), 400
+
+
+@report_bp.route("/api/reports", methods=["POST"])
+@auth_required
+def submit_report():
+    """Submit (or update) today's work-progress report for the signed-in person."""
+    person_type, person_id = _person_from_auth()
+    if not person_id:
+        return jsonify({"error": "Authentication required"}), 401
+
+    data = request.get_json(silent=True) or {}
+    date = data.get("date")
+    if not date:
+        from datetime import date as _date_type
+        date = _date_type.today().isoformat()
+    content = data.get("content", "")
+    tasks_done = data.get("tasks_done")
+    hours = data.get("hours")
+
+    doc = add_report(person_type, person_id, date, content, tasks_done=tasks_done, hours=hours)
+    if not doc:
+        return jsonify({"error": "Could not save report"}), 500
+    return jsonify({"message": "Report saved", "report": doc}), 200
+
+
+@report_bp.route("/api/reports/mine", methods=["GET"])
+@auth_required
+def my_reports():
+    """Reports submitted by the signed-in person."""
+    person_type, person_id = _person_from_auth()
+    if not person_id:
+        return jsonify({"error": "Authentication required"}), 401
+    docs = reports_for_person(person_id, person_type=person_type)
+    return jsonify({"reports": docs}), 200
+
+
+@report_bp.route("/api/reports", methods=["GET"])
+@admin_required
+def list_all_reports():
+    """All daily reports (admin). Supports person_type, person_id, date,
+    start_date and end_date query filters."""
+    docs = list_reports(
+        person_type=request.args.get("person_type"),
+        person_id=request.args.get("person_id"),
+        date=request.args.get("date"),
+        start_date=request.args.get("start_date"),
+        end_date=request.args.get("end_date"),
+    )
+    return jsonify({"reports": docs}), 200
+
+
+@report_bp.route("/api/reports/<report_id>", methods=["GET"])
+@auth_required
+def get_one_report(report_id):
+    person_type, person_id = _person_from_auth()
+    if not person_id:
+        return jsonify({"error": "Authentication required"}), 401
+    doc = get_report(report_id)
+    if not doc:
+        return jsonify({"error": "Report not found"}), 404
+    auth = current_auth()
+    if auth.get("role") != "admin" and (
+        doc.get("person_type") != person_type or doc.get("person_id") != person_id
+    ):
+        return jsonify({"error": "Forbidden"}), 403
+    return jsonify({"report": doc}), 200
+
+
+@report_bp.route("/api/reports/<report_id>", methods=["PUT"])
+@auth_required
+def update_report(report_id):
+    person_type, person_id = _person_from_auth()
+    if not person_id:
+        return jsonify({"error": "Authentication required"}), 401
+    doc = get_report(report_id)
+    if not doc:
+        return jsonify({"error": "Report not found"}), 404
+    auth = current_auth()
+    if auth.get("role") != "admin" and (
+        doc.get("person_type") != person_type or doc.get("person_id") != person_id
+    ):
+        return jsonify({"error": "Forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    add_report(
+        doc.get("person_type", person_type),
+        doc.get("person_id", person_id),
+        doc.get("date"),
+        data.get("content", doc.get("content", "")),
+        tasks_done=data.get("tasks_done", doc.get("tasks_done")),
+        hours=data.get("hours", doc.get("hours")),
+    )
+    return jsonify({"message": "Report updated"}), 200
+
+
+@report_bp.route("/api/reports/<report_id>", methods=["DELETE"])
+@auth_required
+def delete_report(report_id):
+    person_type, person_id = _person_from_auth()
+    if not person_id:
+        return jsonify({"error": "Authentication required"}), 401
+    db = get_db()
+    doc = get_report(report_id)
+    if not doc:
+        return jsonify({"error": "Report not found"}), 404
+    auth = current_auth()
+    if auth.get("role") != "admin" and (
+        doc.get("person_type") != person_type or doc.get("person_id") != person_id
+    ):
+        return jsonify({"error": "Forbidden"}), 403
+    db.daily_reports.delete_one({"_id": _to_oid(report_id)})
+    return jsonify({"message": "Report deleted"}), 200
 
 
 def _export_excel(report_type, headers, rows):

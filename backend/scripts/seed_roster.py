@@ -55,85 +55,65 @@ CREDENTIALS_FILE = os.path.join(
 ROSTER_EMPLOYEES = [
     # id, name, role, department, contact, mode, status, email, project, github
     ("PSM001", "Prasanna Venkatesan R", "CTO", "Management", "9360207861", "on-site", "working",
-     "prasanna30102005@gmail.com", "manatech", ""),
+     "prasanna30102005@gmail.com", "", ""),
     ("PSM002", "Maniyarasan S", "CEO", "Management", "7339386911", "on-site", "working",
-     "smaniyarasan0904@gmail.com", "PSM App", ""),
-    ("PSM003", "Manikandan V D", "Software Lead", "Development", "9841283536", "on-site", "working",
-     "appuprakash20062006@gmail.com", "need to asign", ""),
-    ("PSM004", "Sivasakthi R", "Project Manager", "Management", "9789673120", "on-site", "working",
-     "sivasakthi2007ramakrishnan@gmail.com", "offer letter mail",
-     "https://github.com/sivasakthiramakrishnan-blip"),
-    ("PSM005", "Gopika D", "Human Resources Manager", "Development", "81486 90996", "on-site", "working",
-     "rama8785343@gmail.com", "", ""),
+     "smaniyarasan0904@gmail.com", "", ""),
     ("PSM006", "Lohan K J", "Data Analyst", "Development", "7339013339", "on-site", "working",
-     "lohankanagaraj@gmail.com", "school management system", ""),
+     "lohankanagaraj@gmail.com", "", ""),
+    ("PSM003", "Divyalakshmi K", "Ai & Software development", "Management", "9360633957", "Remote", "working",
+     "k.divyalakshmi22@gmail.com", "", ""),
+    ("PSM010", "Praveen S", "Python Full Stack Developer", "Development", "9345828128", "on-site", "working",
+     "praveens4u2006@gmail.com", "", ""),
     ("PSM007", "Mohanasundaram M", "Market Analyst Engineer", "Marketing", "9751985197", "on-site", "working",
-     "mohanvalar07@gmail.com", "content creating", ""),
-    ("PSM008", "Jeevanatham S", "Business Development Executive", "R&D", "9345905356", "on-site", "working",
-     "jeevanandhamsakthivel619@gmail.com", "fleet management",
-     "https://github.com/Jeevanandhamsakthivel"),
-    ("PSM009", "Logeshwaran S", "Java FullStack", "Development", "7871699871", "on-site", "working",
-     "logeshwaran0525@gmail.com", "real-estate website", "https://github.com/logeswaransankar"),
-    ("PSM010", "Kishore A", "Research & Product Analyst", "R&D", "9384224340", "on-site", "working",
-     "kishorearul16@gmail.com", "", ""),
-    ("PSM011", "Praveen S", "Python Full Stack Developer", "Development", "9345828128", "on-site", "working",
-     "praveens4u2006@gmail.com", "billing system", "https://github.com/Praveen562006"),
+     "mohanvalar07@gmail.com", "", ""),
+    ("PSM011", "Navadheep Senbaga Priyan C", "Lead Gen Engineer", "Marketing", "6383920620", "on-site", "working",
+     "navadheep926@gmail.com", "", ""),
+    ("PSM004", "Sivasakthi R", "Project Manager", "Management", "9789673120", "on-site", "working",
+     "sivasakthi2007ramakrishnan@gmail.com", "", ""),
     ("PSM012", "Manogar S", "Research Analyst", "R&D", "8680913368", "on-site", "working",
-     "manogarm263@gmail.com", "client acquisition", "https://github.com/manogar263"),
-    ("PSM013", "Hariharan P", "Developer", "Development", "", "on-site", "working", "", "", ""),
-    ("PSM014", "Navadheep Senbaga Priyan C", "Lead Gen Engineer", "Marketing", "6383920620", "on-site", "working",
-     "navadheep926@gmail.com", "content creating", ""),
+     "manogarm263@gmail.com", "", ""),
+    ("PSM008", "Jeevanatham S", "Business Development Executive", "R&D", "9345905356", "on-site", "working",
+     "jeevanandhamsakthivel619@gmail.com", "", ""),
+    ("PSM005", "Gopika D", "Human Resources Manager", "Development", "8148690996", "on-site", "working",
+     "rama8785343@gmail.com", "", ""),
+    ("PSM009", "Logeshwaran S", "Java FullStack", "Development", "7871699871", "on-site", "working",
+     "logeshwaran0525@gmail.com", "", ""),
 ]
 
 ROSTER_INTERNS = [
     # id, name, role, mentor, department, contact, mode, status, email, project, github
-    ("PSMI001", "Divyalakshmi K", "AI & Software Development (Intern)", "Prasanna Venkatesan R", "intern",
-     "9360633957", "Remote", "working", "k.divyalakshmi22@gmail.com", "plagiarism testing", ""),
-    ("PSMI002", "Aysha Sabaa", "AI (Intern)", "Prasanna Venkatesan R", "intern",
-     "", "Remote", "working", "ayesha03052004@gmail.com", "AI voice calling agent", ""),
-    ("PSMI003", "Keerthana P", "Python Web Developer (Intern)", "Prasanna Venkatesan R", "intern",
-     "", "Remote", "working", "keerthanapanjatsaram@gmail.com", "portfolio website", ""),
-    ("PSMI004", "Aniz Fathima R", "Gen AI & LLM Engineer", "Lohan K J", "intern",
-     "8838784588", "", "remote", "anizfathima132007@gmail.com", "office connect",
-     "https://github.com/anizfathima132007-cloud"),
-    ("PSMI005", "Bhuvaneshwari.S", "Gen AI & LLM Engineer", "Lohan K J", "intern",
-     "8608146095", "", "remote", "bhuvaneshwari27006@gmail.com", "RAG-Based AI Chatbot for companys",
-     "https://github.com/bhuvaneshwari27006-alt"),
-    ("PSMI006", "Kaviya T", "Data Analyst", "Lohan K J", "intern",
-     "8608424340", "", "REMOTE", "kaviyathamarai932@gmail.com", "office connect",
-     "https://github.com/kaviya0227"),
-    ("PSMI007", "pade Venkata Anusha", "Gen AI & LLM Engineer", "Lohan K J", "intern",
-     "7093561016", "on-site", "Remote", "anushapade07@gmail.com", "RAG-Based AI Chatbot for companys",
-     "https://github.com/anushapade03"),
-    ("PSMI008", "Saran R", "Data Scientist", "Prasanna Venkatesan R", "intern",
-     "9751550472", "on-site", "", "saran051119@gmail.com", "", ""),
-    ("PSMI009", "Ramana M", "Full Stack Developer", "Prasanna Venkatesan R", "intern",
-     "7708280220", "on-site", "", "ramanamurugan46@gmail.com", "", ""),
-    ("PSMI010", "S.Manoranjankumar", "Gen AI & LLM Engineer", "Lohan K J", "intern",
-     "8015568894", "", "REMOTE", "manosvsm20070@gmail.com", "RAG-Based AI Chatbot for companys",
-     "https://github.com/manosvsm20070-hub"),
-    ("PSMI011", "Senthilnathan M", "Data Analyst", "Lohan K J", "intern",
-     "9342724307", "", "Remote", "mrsurendhar11@gmail.com", "psm intern",
-     "https://github.com/Senthil112006"),
-    ("PSMI012", "Karthikeyan K", "Data Analyst", "Lohan K J", "intern",
-     "8122006649", "", "Remote", "karthikalidasan14@gmail.com", "psm intern",
-     "https://github.com/karthikalidasan14-create"),
-    ("PSMI013", "SOMA SUNDHARAM S", "Data Scientist", "Lohan K J", "intern",
-     "6303300918", "", "Remote", "somasundharams767@gmail.com", "psm intern",
-     "https://github.com/somasundharams767-dotcom"),
-    ("PSMI014", "Syed Faruk B", "Data Analyst", "Lohan K J", "intern",
-     "8531923385", "", "Remote", "syedfaruk718@gmail.com", "psm intern",
-     "https://github.com/syedfaruk18"),
-    ("PSMI015", "Anees Baig J", "Gen AI & LLM Engineer", "Lohan K J", "intern",
-     "834416441", "", "REMOTE", "anees151978@gmail.com", "office connected", ""),
-    ("PSMI016", "Akilan. R", "Data Scientist", "Lohan K J", "intern",
-     "75388 38958", "", "REMOTE", "akilanrajasekaran2007@gmail.com", "",
-     "https://github.com/akilanrajasekaran2007-wq"),
-    ("PSMI017", "Nusrath banu. H", "Data Scientist", "Lohan K J", "intern",
-     "9843913198", "", "REMOTE", "nusrathbanuot@gmail.com", "", ""),
-    ("PSMI018", "Kaviya K", "Software Developer", "Maniyarasan S", "intern",
-     "9363960183", "", "Remote", "dkaviya69@gmail.com", "psm intern",
-     "https://github.com/Kaviya-K-Boop"),
+    ("PSMI003", "Keerthana P", "Python web developer (intern)", "", "intern",
+     "", "Remote", "working", "keerthanapanjatsaram@gmail.com", "", ""),
+    ("PSMI004", "Aniz Fathima R", "Gen AI & LLM Engineer", "", "intern",
+     "8838784588", "remote", "working", "anizfathima132007@gmail.com", "", ""),
+    ("PSMI005", "Bhuvaneshwari.S", "Gen AI & LLM Engineer", "", "intern",
+     "8608146095", "remote", "working", "bhuvaneshwari27006@gmail.com", "", ""),
+    ("PSMI006", "Kaviya T", "Data Analyst", "", "intern",
+     "8608424340", "REMOTE", "working", "kaviyathamarai932@gmail.com", "", ""),
+    ("PSMI007", "pade Venkata Anusha", "Gen AI & LLM Engineer", "", "intern",
+     "7093561016", "on-site", "working", "anushapade07@gmail.com", "", ""),
+    ("PSMI009", "Ramana M", "full stack developer", "", "intern",
+     "7708280220", "on-site", "working", "ramanamurugan46@gmail.com", "", ""),
+    ("PSMI010", "S.Manoranjankumar", "Gen AI & LLM Engineer", "", "intern",
+     "8015568894", "REMOTE", "working", "manosvsm20070@gmail.com", "", ""),
+    ("PSMI011", "Senthilnathan M", "Data Analyst", "", "intern",
+     "9342724307", "Remote", "working", "mrsurendhar11@gmail.com", "", ""),
+    ("PSMI012", "Karthikeyan K", "Data analyst", "", "intern",
+     "8122006649", "Remote", "working", "karthikalidasan14@gmail.com", "", ""),
+    ("PSMI013", "SOMA SUNDHARAM S", "DATA SCIENTIST", "", "intern",
+     "6303300918", "Remote", "working", "somasundharams767@gmail.com", "", ""),
+    ("PSMI014", "Syed Faruk B", "Data analyst", "", "intern",
+     "8531923385", "Remote", "working", "syedfaruk718@gmail.com", "", ""),
+    ("PSMI015", "Anees Baig J", "Gen AI & LLM Engineer", "", "intern",
+     "834416441", "REMOTE", "working", "anees151978@gmail.com", "", ""),
+    ("PSMI016", "Akilan. R", "Data scientist", "", "intern",
+     "7538838958", "REMOTE", "working", "akilanrajasekaran2007@gmail.com", "", ""),
+    ("PSMI017", "Nusrath banu. H", "Data scientist", "", "intern",
+     "9843913198", "REMOTE", "working", "nusrathbanuot@gmail.com", "", ""),
+    ("PSMI018", "Kaviya K", "Software developer", "", "intern",
+     "9363960183", "Remote", "working", "dkaviya69@gmail.com", "", ""),
+    ("PSMI008", "Saran R", "Data scientist", "", "intern",
+     "9751550472", "on-site", "working", "saran051119@gmail.com", "", ""),
 ]
 
 
@@ -243,27 +223,29 @@ def resolve_mentors(db, docs):
 
 
 def upsert(collection, key, doc, credentials, dry_run):
-    """Insert or update one person; new people get a temporary password."""
+    """Insert or update one person; every person gets a fresh temporary
+    password so roster-credentials.csv stays in sync with the database."""
     existing = collection.find_one({key: doc[key]})
+    password = generate_temp_password(12)
     if existing:
         doc["created_at"] = existing.get("created_at", datetime.utcnow())
+        doc["password_hash"] = generate_password_hash(password)
         if not dry_run:
             collection.update_one({"_id": existing["_id"]}, {"$set": doc})
         action = "updated"
     else:
         doc["created_at"] = datetime.utcnow()
-        password = generate_temp_password(12)
         doc["password_hash"] = generate_password_hash(password)
         if not dry_run:
             collection.insert_one(doc)
-        credentials.append({
-            "person_type": collection.name,
-            "id": doc[key],
-            "name": doc["name"],
-            "email": doc.get("email", ""),
-            "temporary_password": password,
-        })
         action = "created"
+    credentials.append({
+        "person_type": collection.name,
+        "id": doc[key],
+        "name": doc["name"],
+        "email": doc.get("email", ""),
+        "temporary_password": password,
+    })
     return action
 
 

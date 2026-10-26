@@ -129,6 +129,11 @@ def _ensure_indexes():
     db.support_tickets.create_index("created_at")
     db.notifications.create_index([("person_type", 1), ("person_id", 1), ("created_at", -1)])
     db.notifications.create_index("dedupe_key")
+    db.daily_reports.create_index(
+        [("person_type", 1), ("person_id", 1), ("date", 1)], unique=True
+    )
+    db.daily_reports.create_index("date")
+    db.daily_reports.create_index("person_id")
     db.announcements.create_index("created_at")
     _ensure_ttl_indexes(db)
     _seed_settings(db)

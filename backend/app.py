@@ -39,6 +39,7 @@ from backend.utils.photo_utils import (
 from backend.utils import storage
 from backend.utils.auth import verify_token, auth_required
 from backend.utils.uploads import validate_image_upload
+from backend.scheduler import start_scheduler
 
 sock = Sock()
 
@@ -223,6 +224,7 @@ def create_app():
         )
 
     _start_auto_absent_worker(app)
+    start_scheduler(app)
 
     sock.init_app(app)
 
