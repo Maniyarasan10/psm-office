@@ -1,62 +1,126 @@
-# PSM Office APK download setup
+# PSM Office APK release page
 
-This page is a static release landing page for the Android APK. It is not an upload service and does not add the APK file for you.
+Static release site for the internal PSM Office Android app. It serves the signed
+APK and explains the app, installation and daily use.
 
-## 1. Prerequisites
+- Live site: https://maniyarasan10.github.io/psm-apk/
+- Repository: https://github.com/Maniyarasan10/psm-apk
 
-1. Confirm the Expo app exists at `mobile/` and the project name is `PSM Office` with package `com.psm.office`.
-2. Install the EAS CLI in the project if you do not already have it:
-   ```bash
-   cd "C:\Users\Maniyarasan S\Desktop\Psm office\mobile"
-   npm install -g eas-cli
-   ```
-   Or use `npx eas-cli` directly without global installation.
-3. Make sure you are signed in to Expo and your project is connected to the correct account.
+Current release: `1.0.0` (build `1`), universal APK, Android 7.0+, `59.9 MB`.
 
-## 2. Build the APK
+## What is in this folder
 
-1. Open a terminal in `mobile/`.
-2. Run the preview build command:
-   ```bash
-   cd "C:\Users\Maniyarasan S\Desktop\Psm office\mobile"
-   npx eas-cli build --platform android --profile preview
-   ```
-3. Wait for EAS to complete the Android build. The output is an APK for the preview profile and internal distribution.
-4. Download the generated APK from the EAS console or build results page.
+- `index.html` - the release page, including app details, setup steps, usage guide and FAQ.
+- `psm-office.apk` - the signed release APK served by the page.
+- `ce.png` - the PSM Office logo used in the header and footer.
+- `SETUP.md` - this document.
+- `.nojekyll` - tells GitHub Pages to serve the files without Jekyll processing.
 
-## 3. Publish the release page
+The page checks `psm-office.apk` with a `HEAD` request. When the file is reachable,
+the status pill reads **Ready to install** and the displayed size is read from the
+server. The download buttons work even if the check is unavailable.
 
-1. Copy the downloaded APK into this folder and rename it to exactly:
-   ```text
-   psm-office.apk
-   ```
-2. Place the file beside `index.html` in:
-   ```text
-   C:\Users\Maniyarasan S\Desktop\Psm office\apk-download
-   ```
-3. Open [Netlify Drop](https://app.netlify.com/drop) and sign in or create a Netlify account.
-4. Drag the complete `apk-download` folder onto the deploy area. If your browser asks, allow access to the folder.
-5. Wait for Netlify to finish publishing, then open the generated site URL and confirm the download button says **Ready**.
-6. Share that public site URL with Android users. Keep the folder structure intact: the page reads `psm-office.apk` from the same deployment.
-7. Do not claim the APK is present unless the file is actually there and the page is served from the same deployment.
+## Preview locally
 
-## 4. Update the APK later
+Run a local HTTP server from the folder that contains `index.html`:
 
-1. Build a new APK using the same EAS command above.
-2. Replace the old `psm-office.apk` in the deployment folder with the new file.
-3. Return to Netlify Drop and drag the full updated `apk-download` folder onto the deploy area again.
-4. After the redeploy is complete, open the site URL and refresh to ensure the new file is served and the button is active.
+```powershell
+python -m http.server 8765
+```
 
-## 5. User download and install steps
+Open `http://127.0.0.1:8765/` and confirm:
 
-1. Open the public release page in the browser.
-2. Tap the active Download APK button.
-3. Save the file to the Android device.
-4. Open the downloaded file from the browser or Files app.
-5. If Android asks for permission to install apps from this source, allow it.
-6. Confirm the install and then open the PSM Office app.
-7. Sign in with the correct user account.
+1. The page loads without console errors.
+2. The status pill reads **Ready to install**.
+3. **Download APK** saves `psm-office.apk` and the file opens on Android.
 
-## Important note
+Opening `index.html` directly with `file://` also works, but the status check is
+browser-dependent. Use the local server or the deployed site for final verification.
 
-This is static file hosting, not an in-page upload system. The page does not upload the APK to the public site. The owner must build the APK with EAS, place `psm-office.apk` in the same folder as `index.html`, and redeploy the whole folder whenever the version changes.
+## Deploy on GitHub Pages
+
+This repository is already configured to publish from the `main` branch at the
+repository root.
+
+1. Commit the updated site files.
+2. Push to `main`.
+3. Wait for the Pages build to finish, then open the live site and confirm the
+   download works.
+
+For a new repository, open **Settings → Pages**, choose **Deploy from a branch**,
+select `main` and `/ (root)`, then save. Do not select `/docs`; `index.html` is at
+the repository root.
+
+## Build a new signed APK
+
+### Local Gradle build
+
+Prerequisites: Node.js, Android SDK, and the Android NDK required by the project.
+
+```powershell
+cd "C:\Users\Maniyarasan S\Desktop\Psm office\mobile"
+npm install
+cd android
+.\gradlew.bat assembleRelease
+```
+
+The signed output is:
+
+```text
+mobile\android\app\build\outputs\apk\release\app-release.apk
+```
+
+Release signing uses `mobile\android\keystore.properties` (or the `PSM_KEYSTORE_*`
+environment variables). Both the properties file and the keystore are gitignored.
+Never commit or upload them.
+
+`mobile\android\build.gradle` contains the project's CMake/clang workaround. Keep it
+when rebuilding on Windows.
+
+### EAS Build alternative
+
+If the project is connected to Expo and signed in:
+
+```powershell
+cd "C:\Users\Maniyarasan S\Desktop\Psm office\mobile"
+npx eas-cli build --platform android --profile preview
+```
+
+The `preview` profile in `eas.json` produces an internal-distribution APK.
+
+## Publish a new version
+
+1. Bump `versionCode` and `versionName` in `mobile\android\app\build.gradle`.
+2. Build and verify the new APK.
+3. Replace `psm-office.apk` in the release repository root.
+4. Update the release values in `index.html`:
+   - search for `1.0.0` and `Build 1`
+   - replace the displayed SHA-256 checksums
+   - update the `59.9 MB` fallback labels (the live value is read from the APK)
+   - update the version in the status fallback text
+5. Update the current release line at the top of this file.
+6. Commit and push to `main`; GitHub Pages redeploys automatically.
+
+Compute the checksum on Windows:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\psm-office.apk
+```
+
+To print the signing certificate hash, use `apksigner` from the Android SDK
+build-tools:
+
+```powershell
+apksigner verify --print-certs .\psm-office.apk
+```
+
+Use the SHA-256 certificate digest shown by `apksigner` on the page.
+
+## Notes
+
+- GitHub Pages makes this release site and APK publicly reachable.
+- The APK is under GitHub's 100 MB file limit but above the 50 MB recommendation.
+- Install the new APK over the old one; users do not need to uninstall first when the
+  signing key is unchanged.
+- Do not claim the APK is available unless `psm-office.apk` is present beside
+  `index.html` in the deployed repository.
