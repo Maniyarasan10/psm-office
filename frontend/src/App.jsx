@@ -14,6 +14,7 @@ import Projects from './pages/Projects';
 import Documents from './pages/Documents';
 import Finance from './pages/Finance';
 import Reports from './pages/Reports';
+import DailyReports from './pages/DailyReports';
 import Announcements from './pages/Announcements';
 import Notifications from './pages/Notifications';
 import Settings from './pages/Settings';
@@ -34,6 +35,7 @@ function AppRoutes() {
         <Route path="documents" element={<Documents />} />
         <Route path="finance" element={<Finance />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="daily-reports" element={<DailyReports />} />
         <Route path="announcements" element={<Announcements />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="support" element={<Support />} />

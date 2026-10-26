@@ -337,4 +337,16 @@ export const getReport = (reportType, params) =>
 export const exportReport = (formatType, params) =>
   api.get(`/reports/export/${formatType}`, { params, responseType: 'blob' });
 
+export const getDailyReports = (params) =>
+  api.get('/reports', { params });
+
+export const getDailyReport = (id) =>
+  api.get(`/reports/${id}`);
+
+export const updateDailyReport = (id, data) =>
+  api.put(`/reports/${id}`, data);
+
+export const deleteDailyReport = (id) =>
+  api.delete(`/reports/${id}`);
+
 export default api;
