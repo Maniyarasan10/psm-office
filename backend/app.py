@@ -116,6 +116,13 @@ def _signed_media_value(value):
         return storage.delivery_url(value)
     if value.startswith("/uploads/") or value.startswith("/api/photo/"):
         return media_tokens.sign_path(value)
+    parsed = storage.parse_cloudinary_url(value)
+    if parsed and parsed.get("delivery_type") == "authenticated":
+        # Older rows may contain a signed delivery URL. Re-sign it from the
+        # reference so the response never carries an expired signature.
+        return storage.delivery_url(
+            f"cloudinary://{parsed['resource_type']}/{parsed['public_id']}"
+        )
     return value
 
 

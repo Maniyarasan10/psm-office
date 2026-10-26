@@ -38,7 +38,8 @@ _STORAGE_LOCAL = "local"
 _CLOUDINARY_HOST = "res.cloudinary.com"
 _REF_SCHEME = "cloudinary://"
 _DELIVERY_TYPES = ("upload", "asset", "private", "authenticated", "fetch")
-_VERSION_RE = re.compile(r"^v\d{4,}$")
+_VERSION_RE = re.compile(r"^v\d+$")
+_SIGNATURE_RE = re.compile(r"^s--[A-Za-z0-9_-]+--$")
 
 
 class StorageError(Exception):
@@ -150,7 +151,12 @@ def parse_cloudinary_url(url):
             return None
 
     rest = segments[delivery_index + 1:]
-    if rest and _VERSION_RE.match(rest[0]):
+    # Signed Cloudinary URLs insert a signature and a version before the public
+    # id: /authenticated/s--abc123--/v1/psm/photos/xyz. They are delivery
+    # metadata, not part of the asset's public id.
+    while rest and (
+        _SIGNATURE_RE.match(rest[0]) or _VERSION_RE.match(rest[0])
+    ):
         rest = rest[1:]
     if not rest:
         return None

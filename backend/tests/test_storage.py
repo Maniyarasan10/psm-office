@@ -104,6 +104,19 @@ class StorageUrlTests(unittest.TestCase):
         self.assertEqual(parsed["delivery_type"], "authenticated")
         self.assertTrue(parsed["reference"])
 
+    def test_parses_signed_authenticated_delivery_url(self):
+        from backend.utils import storage
+
+        parsed = storage.parse_cloudinary_url(
+            "https://res.cloudinary.com/demo/image/authenticated/"
+            "s--iRe1nZLs--/v1/psm/photos/abc"
+        )
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["public_id"], "psm/photos/abc")
+        self.assertEqual(parsed["resource_type"], "image")
+        self.assertEqual(parsed["delivery_type"], "authenticated")
+        self.assertFalse(parsed["reference"])
+
     def test_authenticated_references_are_signed_for_delivery(self):
         from backend.utils import storage
 
@@ -222,6 +235,17 @@ class PhotoPathTests(unittest.TestCase):
         signed = (
             "https://res.cloudinary.com/demo/image/authenticated/v1700000000/"
             "psm/photos/abc.jpg?expires_at=1&signature=xyz"
+        )
+        self.assertEqual(
+            normalize_photo_path(signed), "cloudinary://image/psm/photos/abc"
+        )
+
+    def test_signature_and_short_version_are_not_public_id(self):
+        from backend.utils.photo_utils import normalize_photo_path
+
+        signed = (
+            "https://res.cloudinary.com/caiizt91/image/authenticated/"
+            "s--iRe1nZLs--/v1/psm/photos/abc"
         )
         self.assertEqual(
             normalize_photo_path(signed), "cloudinary://image/psm/photos/abc"
